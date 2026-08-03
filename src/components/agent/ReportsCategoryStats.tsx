@@ -1,13 +1,15 @@
-import { REPORTS_CATEGORIES } from "@/src/data/agentReports";
+import type { ReportCategory } from "@/src/constants/agentReports";
 
-export function ReportsCategoryStats() {
+export function ReportsCategoryStats({ categories }: { categories: ReportCategory[] }) {
   return (
     <div className="rounded-xl border border-outline-variant bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
       <h3 className="mb-6 text-headline-md font-headline-md">
         Tickets by Category
       </h3>
       <div className="space-y-5">
-        {REPORTS_CATEGORIES.map((cat) => (
+        {categories.length === 0 ? (
+          <p className="text-body-md text-secondary">No category data available.</p>
+        ) : categories.map((cat) => (
           <div key={cat.label}>
             <div className="mb-2 flex justify-between font-label-md text-label-md">
               <span>{cat.label}</span>

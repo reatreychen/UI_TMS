@@ -1,6 +1,6 @@
 "use client";
 
-import { SETTINGS_SUB_NAV } from "@/src/data/agentSettings";
+import { SETTINGS_SUB_NAV } from "@/src/constants/agentSettings";
 
 interface SettingsSubNavProps {
   activeSection: string;

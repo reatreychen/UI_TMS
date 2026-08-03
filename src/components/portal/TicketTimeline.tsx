@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { CheckCheck, Info } from "lucide-react";
-import type { ChatMessage, TimelineEvent } from "@/src/data/ticketDetail";
-import { TIMELINE_ITEMS } from "@/src/data/ticketDetail";
+import type { ChatMessage, TimelineEvent } from "@/src/constants/ticketDetail";
+import { TIMELINE_ITEMS } from "@/src/constants/ticketDetail";
 
 /* ── Individual bubble components ──────────────────────────────── */
 

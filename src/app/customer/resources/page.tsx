@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { TopNav } from "@/src/components/portal/TopNav";
 import { PortalFooter } from "@/src/components/portal/PortalFooter";
+import { fetchAllResources, ResourceRecord } from "@/src/services/portalService";
 
 // ── Resource Card ─────────────────────────────────────────────────────────────
 type Resource = {
+  id?: string;
   type: string;
   typeIcon: string;
   typeColor: string;
@@ -68,27 +70,27 @@ const resources: Resource[] = [
     typeColor: "text-primary",
     title: "The Complete Guide to ITIL 4 in Modern Enterprises",
     description:
-      "Bridge the gap between ITIL best practices and the agility demanded by modern support organizations.",
+      "An end-to-end breakdown of implementing service value systems without sacrificing agile delivery speed.",
     cta: "Download E-book",
     ctaIcon: "download",
     imgSrc:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDm-naFNWuP4Kjjkqe9kHOVb6EOGVh280TF7OIkLbskMkUy9gKNGhLryzxA2I3k0QlEFVYGlpM7bTD4l4uIr9zGgwyjkOFU5t6E-VBpQ44EEy4bp5jrFKrTenYRcu8voCZG-osaFrVAFszWU7GsxtvxEtbu6wHPhXamP4dIYe3SpE9WD3d5ZZwK29f_p24aNKvhiFIHdHsyu1OARc4wG_wDcSHyAxBWzenUtyxoWEQTa5nH973Uu2D9fNLiZTP5aGgSDR6al02afIDI",
-    imgAlt: "Enterprise whitepaper",
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuAwUK6h-n768hgfEdMCJin1ysjYc6kwhZYm4Q-_uQAl1rw_U4cKDsp29TYw-OeQWBPnw1TiMdUJEEb9zFyphXpbif_sAIvRX9aNSWcqSVwZBACwO90HW2xXPtXIsVuN74ibKGo1TKOwnjkoHRsWFFcuj3-6PzCNn2N3kHTLseZ6V9HqG8ee1Zp9GIhz9V954UtCS5pWvApesOJTP1VGBXoEW71vTyXjxpWB3lPa6_2bM-qqquDrvCQqjjq1GEvvvo_Prq86FB6bfwpn",
+    imgAlt: "Stack of books and tablet",
     category: "E-books",
   },
   {
-    type: "Case Study",
-    typeIcon: "corporate_fare",
-    typeColor: "text-primary",
-    title: "How FinTech Corp Cut Resolution Time by 60% in 90 Days",
+    type: "Whitepaper",
+    typeIcon: "description",
+    typeColor: "text-on-secondary-fixed-variant",
+    title: "Security & Compliance in Cloud TMS",
     description:
-      "A rapid deployment story — from legacy helpdesk to Kinetic-powered AI triage in just three months.",
-    cta: "Read Case Study",
+      "A technical audit checklist and regulatory overview for deploying enterprise transportation management systems.",
+    cta: "Read Whitepaper",
     ctaIcon: "arrow_forward",
     imgSrc:
       "https://lh3.googleusercontent.com/aida-public/AB6AXuCwXl3birODmYwQTy-7FS8eywojGpOzOSKp5fsGLU-3eLF3W7oJ49lrjF_wMxShZbueq8-0ZSAO9aRqxGEULbCzKnEYXf-4yphQDfWub9wDRD2iRpmaigRov1lWmSmI0ll0TGP6pzenST05bp7jzIA_Th68j5giu9eBZs7-y53PCZGJDb6ia5NhcDEpgfsWaWvtfC7ipz96wL-JA5kwHCCc0frg90sXqtZMQIahcGA_6DeXOAxlsAbe1bwCZF2ki10RyGFXmB9xtjTm",
-    imgAlt: "Logistics hub at dawn",
-    category: "Case Studies",
+    imgAlt: "Digital security shield",
+    category: "Whitepapers",
   },
   {
     type: "Webinar",
@@ -109,16 +111,92 @@ const resources: Resource[] = [
 const FILTERS = ["All", "Case Studies", "Webinars", "Whitepapers", "E-books"] as const;
 type Filter = (typeof FILTERS)[number];
 
+function mapBackendResourceToCard(rec: ResourceRecord): Resource {
+  const t = rec.type || "Whitepaper";
+  let typeIcon = "auto_stories";
+  let typeColor = "text-on-secondary-fixed-variant";
+  let category = "Whitepapers";
+  let cta = "View Guide";
+  let ctaIcon = "arrow_forward";
+  let imgSrc =
+    "https://lh3.googleusercontent.com/aida-public/AB6AXuAwUK6h-n768hgfEdMCJin1ysjYc6kwhZYm4Q-_uQAl1rw_U4cKDsp29TYw-OeQWBPnw1TiMdUJEEb9zFyphXpbif_sAIvRX9aNSWcqSVwZBACwO90HW2xXPtXIsVuN74ibKGo1TKOwnjkoHRsWFFcuj3-6PzCNn2N3kHTLseZ6V9HqG8ee1Zp9GIhz9V954UtCS5pWvApesOJTP1VGBXoEW71vTyXjxpWB3lPa6_2bM-qqquDrvCQqjjq1GEvvvo_Prq86FB6bfwpn";
+
+  if (t === "Case Study") {
+    typeIcon = "corporate_fare";
+    typeColor = "text-primary";
+    category = "Case Studies";
+    cta = "Read Case Study";
+    ctaIcon = "arrow_forward";
+    imgSrc =
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuCwXl3birODmYwQTy-7FS8eywojGpOzOSKp5fsGLU-3eLF3W7oJ49lrjF_wMxShZbueq8-0ZSAO9aRqxGEULbCzKnEYXf-4yphQDfWub9wDRD2iRpmaigRov1lWmSmI0ll0TGP6pzenST05bp7jzIA_Th68j5giu9eBZs7-y53PCZGJDb6ia5NhcDEpgfsWaWvtfC7ipz96wL-JA5kwHCCc0frg90sXqtZMQIahcGA_6DeXOAxlsAbe1bwCZF2ki10RyGFXmB9xtjTm";
+  } else if (t === "Webinar" || t === "Video") {
+    typeIcon = "videocam";
+    typeColor = "text-tertiary";
+    category = "Webinars";
+    cta = "Watch On-Demand";
+    ctaIcon = "play_circle";
+    imgSrc =
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuDHOyMjXdyrRLYM-pLY6vHoYgr25N4op389ZIr59bVQhF1A2U-gr4h4fC4Xq89c0ThLR0dulNYBxwIb0cwqqIBmU84WUBPW2SBhJ-VQFQrUGuUwdnNh0ZtnXL4-p-6foEQ7XNV9s4yU5TJcD3I-1Ujg-ZXKu6M-DjFxtIWBSj6D9nEmc5iwPgiPiSgJjIFKD3AYNHIhA7ezCHST95Y_imLVZHHQWxwa5KmZCr2raOAXyCWqRjGHrK11rLHVwJpt5TvoOyELM0tbNXsM";
+  } else if (t === "E-book") {
+    typeIcon = "menu_book";
+    typeColor = "text-primary";
+    category = "E-books";
+    cta = "Download E-book";
+    ctaIcon = "download";
+    imgSrc =
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuAwUK6h-n768hgfEdMCJin1ysjYc6kwhZYm4Q-_uQAl1rw_U4cKDsp29TYw-OeQWBPnw1TiMdUJEEb9zFyphXpbif_sAIvRX9aNSWcqSVwZBACwO90HW2xXPtXIsVuN74ibKGo1TKOwnjkoHRsWFFcuj3-6PzCNn2N3kHTLseZ6V9HqG8ee1Zp9GIhz9V954UtCS5pWvApesOJTP1VGBXoEW71vTyXjxpWB3lPa6_2bM-qqquDrvCQqjjq1GEvvvo_Prq86FB6bfwpn";
+  }
+
+  return {
+    id: rec.id,
+    type: t,
+    typeIcon,
+    typeColor,
+    title: rec.title,
+    description:
+      rec.description ||
+      rec.subtitle ||
+      "Comprehensive guide and industry insights for enterprise logistics teams.",
+    cta,
+    ctaIcon,
+    imgSrc,
+    imgAlt: rec.title,
+    category,
+  };
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ResourcesPage() {
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
+  const [resourcesList, setResourcesList] = useState<Resource[]>(resources);
+  const [isLoading, setIsLoading] = useState(true);
+  const [toastMsg, setToastMsg] = useState("");
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(""), 3000);
+  };
+
+  useEffect(() => {
+    setIsLoading(true);
+    fetchAllResources({ status: "Published" })
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setResourcesList(data.map(mapBackendResourceToCard));
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch customer resources:", err);
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
 
   const filtered =
     activeFilter === "All"
-      ? resources
-      : resources.filter((r) => r.category === activeFilter);
+      ? resourcesList
+      : resourcesList.filter((r) => r.category === activeFilter);
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,46 +244,69 @@ export default function ResourcesPage() {
         </section>
 
         {/* ── FEATURED CONTENT ── */}
-        <section className="mb-20">
-          <div className="relative group bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden flex flex-col md:flex-row items-stretch shadow-sm transition-all hover:shadow-md">
-            <div className="md:w-1/2 relative overflow-hidden h-64 md:h-auto">
-              <div className="absolute inset-0 bg-primary opacity-10 mix-blend-overlay z-10" />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDm-naFNWuP4Kjjkqe9kHOVb6EOGVh280TF7OIkLbskMkUy9gKNGhLryzxA2I3k0QlEFVYGlpM7bTD4l4uIr9zGgwyjkOFU5t6E-VBpQ44EEy4bp5jrFKrTenYRcu8voCZG-osaFrVAFszWU7GsxtvxEtbu6wHPhXamP4dIYe3SpE9WD3d5ZZwK29f_p24aNKvhiFIHdHsyu1OARc4wG_wDcSHyAxBWzenUtyxoWEQTa5nH973Uu2D9fNLiZTP5aGgSDR6al02afIDI"
-                alt="State of Enterprise Support 2024 whitepaper"
-              />
-            </div>
-            <div className="md:w-1/2 p-stack-lg flex flex-col justify-center gap-stack-md">
-              <div className="flex items-center gap-stack-sm">
-                <span className="bg-secondary-container text-on-secondary-container font-label-md text-label-md px-2 py-1 rounded">
-                  Whitepaper
-                </span>
-                <span className="text-on-surface-variant font-label-md text-label-md">
-                  New Release
-                </span>
+        {resourcesList.length > 0 && (
+          <section className="mb-20">
+            <div className="relative group bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden flex flex-col md:flex-row items-stretch shadow-sm transition-all hover:shadow-md">
+              <div className="md:w-1/2 relative overflow-hidden h-64 md:h-auto">
+                <div className="absolute inset-0 bg-primary opacity-10 mix-blend-overlay z-10" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  src={resourcesList[0].imgSrc}
+                  alt={resourcesList[0].imgAlt}
+                />
               </div>
-              <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                State of Enterprise Support 2024
-              </h2>
-              <p className="font-body-md text-body-md text-on-surface-variant">
-                Our most comprehensive report yet. Discover how top global organizations
-                are leveraging AI and predictive analytics to achieve sub-hour resolution
-                times across millions of tickets.
-              </p>
-              <div className="pt-stack-md">
-                <button
-                  type="button"
-                  className="bg-primary text-on-primary px-stack-lg py-stack-sm rounded-lg font-label-md text-label-md flex items-center gap-2 hover:brightness-110 transition-all"
-                >
-                  <span className="material-symbols-outlined text-[18px]">download</span>
-                  Download Now
-                </button>
+              <div className="md:w-1/2 p-stack-lg flex flex-col justify-center gap-stack-md">
+                <div className="flex items-center gap-stack-sm">
+                  <span className="bg-secondary-container text-on-secondary-container font-label-md text-label-md px-2 py-1 rounded">
+                    {resourcesList[0].type}
+                  </span>
+                  <span className="text-on-surface-variant font-label-md text-label-md">
+                    Featured Release
+                  </span>
+                </div>
+                {resourcesList[0].id ? (
+                  <Link href={`/customer/resources/${resourcesList[0].id}`}>
+                    <h2 className="font-headline-lg text-headline-lg text-on-surface hover:text-primary transition-colors cursor-pointer">
+                      {resourcesList[0].title}
+                    </h2>
+                  </Link>
+                ) : (
+                  <h2 className="font-headline-lg text-headline-lg text-on-surface">
+                    {resourcesList[0].title}
+                  </h2>
+                )}
+                <p className="font-body-md text-body-md text-on-surface-variant">
+                  {resourcesList[0].description}
+                </p>
+                <div className="pt-stack-md flex flex-wrap items-center gap-3">
+                  {resourcesList[0].id ? (
+                    <Link
+                      href={`/customer/resources/${resourcesList[0].id}`}
+                      className="bg-primary text-on-primary px-stack-lg py-stack-sm rounded-lg font-label-md text-label-md flex items-center gap-2 hover:brightness-110 transition-all cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">
+                        open_in_new
+                      </span>
+                      View Resource Details
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => showToast(`Opening "${resourcesList[0].title}"...`)}
+                      className="bg-primary text-on-primary px-stack-lg py-stack-sm rounded-lg font-label-md text-label-md flex items-center gap-2 hover:brightness-110 transition-all cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">
+                        {resourcesList[0].ctaIcon || "download"}
+                      </span>
+                      {resourcesList[0].cta || "Download Now"}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* ── RESOURCE GRID ── */}
         <section className="mb-24">
@@ -233,7 +334,22 @@ export default function ResourcesPage() {
           </div>
 
           {/* Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-stack-lg">
+          {isLoading ? (
+            <div className="py-20 text-center text-on-surface-variant font-body-md">
+              <span className="material-symbols-outlined text-4xl animate-spin block mb-2 mx-auto">
+                sync
+              </span>
+              Loading resources...
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-20 text-center text-on-surface-variant font-body-md bg-surface-container-low rounded-xl border border-outline-variant">
+              <span className="material-symbols-outlined text-4xl text-outline block mb-2 mx-auto">
+                folder_open
+              </span>
+              No resources found for this category.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-stack-lg">
             {filtered.map((res, i) => (
               <div
                 key={i}
@@ -257,26 +373,51 @@ export default function ResourcesPage() {
                 </div>
                 <div className="p-stack-md flex-grow flex flex-col justify-between">
                   <div>
-                    <h4 className="font-headline-md text-headline-md text-on-surface group-hover:text-primary transition-colors">
-                      {res.title}
-                    </h4>
+                    {res.id ? (
+                      <Link href={`/customer/resources/${res.id}`}>
+                        <h4 className="font-headline-md text-headline-md text-on-surface group-hover:text-primary transition-colors cursor-pointer">
+                          {res.title}
+                        </h4>
+                      </Link>
+                    ) : (
+                      <h4 className="font-headline-md text-headline-md text-on-surface group-hover:text-primary transition-colors">
+                        {res.title}
+                      </h4>
+                    )}
                     <p className="mt-stack-sm text-on-surface-variant font-body-md text-body-md line-clamp-3">
                       {res.description}
                     </p>
                   </div>
-                  <a
-                    href="#"
-                    className="mt-stack-md text-primary font-label-md text-label-md flex items-center gap-1 group/link"
-                  >
-                    {res.cta}
-                    <span className="material-symbols-outlined text-[16px] transition-transform group-hover/link:translate-x-1">
-                      {res.ctaIcon}
-                    </span>
-                  </a>
+                  {res.id ? (
+                    <Link
+                      href={`/customer/resources/${res.id}`}
+                      className="mt-stack-md text-primary font-label-md text-label-md flex items-center gap-1 group/link cursor-pointer"
+                    >
+                      {res.cta}
+                      <span className="material-symbols-outlined text-[16px] transition-transform group-hover/link:translate-x-1">
+                        {res.ctaIcon}
+                      </span>
+                    </Link>
+                  ) : (
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        showToast(`Opening "${res.title}"...`);
+                      }}
+                      className="mt-stack-md text-primary font-label-md text-label-md flex items-center gap-1 group/link cursor-pointer"
+                    >
+                      {res.cta}
+                      <span className="material-symbols-outlined text-[16px] transition-transform group-hover/link:translate-x-1">
+                        {res.ctaIcon}
+                      </span>
+                    </a>
+                  )}
                 </div>
               </div>
             ))}
-          </div>
+            </div>
+          )}
         </section>
 
         {/* ── NEWSLETTER ── */}
@@ -343,6 +484,13 @@ export default function ResourcesPage() {
           </div>
         </section>
       </main>
+
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-50 bg-inverse-surface text-inverse-on-surface px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-fade-in border border-outline-variant/20">
+          <span className="material-symbols-outlined text-primary">info</span>
+          <span className="font-label-md text-label-md">{toastMsg}</span>
+        </div>
+      )}
 
       <PortalFooter />
     </div>

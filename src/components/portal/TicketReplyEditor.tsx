@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-import { TOOLBAR_ACTIONS, TOOLBAR_ATTACHMENTS } from "@/src/data/appConfig";
+import { TOOLBAR_ACTIONS, TOOLBAR_ATTACHMENTS } from "@/src/constants/appConfig";
 
 export function TicketReplyEditor() {
   const [body, setBody] = useState("");

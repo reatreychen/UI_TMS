@@ -52,37 +52,8 @@ export interface Category {
   description: string;
 }
 
-export const articles: Article[] = [
-  {
-    title: "Setting Up Automated Escalations",
-    href: "/customer/knowledge-base/escalations",
-    description:
-      "Configure SLA-based escalation rules and notification sequences.",
-  },
-  {
-    title: "API Authentication Guide",
-    href: "/customer/knowledge-base/api-auth",
-    description: "OAuth 2.0, API keys, and webhook signature verification.",
-  },
-  {
-    title: "Managing User Roles & Permissions",
-    href: "/customer/knowledge-base/roles",
-    description: "Assign roles, configure access levels, and audit changes.",
-  },
-];
-
-export const trendingDiscussions: TrendingDiscussion[] = [
-  {
-    title: "Best practices for bulk ticket import?",
-    href: "#",
-    meta: "24 replies · Updated 2h ago",
-  },
-  {
-    title: "Custom SLA policies for enterprise tiers",
-    href: "#",
-    meta: "18 replies · Updated 5h ago",
-  },
-];
+export const articles: Article[] = [];
+export const trendingDiscussions: TrendingDiscussion[] = [];
 
 export const docLinks: DocLink[] = [
   { icon: BookOpen, label: "Getting Started", href: "/customer/knowledge-base" },
@@ -118,7 +89,7 @@ export const resources: ResourceLink[] = [
     icon: BookOpen,
     title: "Getting Started Guide",
     description: "Learn the basics of Kinetic TMS.",
-    href: "/customer/knowledge-base/getting-started",
+    href: "/customer/knowledge-base",
   },
   {
     icon: HelpCircle,
@@ -130,7 +101,7 @@ export const resources: ResourceLink[] = [
     icon: ShieldCheck,
     title: "Security Best Practices",
     description: "Keep your account secure.",
-    href: "/customer/knowledge-base/security",
+    href: "/customer/knowledge-base",
   },
 ];
 
@@ -159,23 +130,4 @@ export const popularSearches = [
   "Webhook setup",
 ];
 
-export const categories: Category[] = [
-  {
-    title: "Getting Started",
-    href: "#",
-    icon: "rocket_launch",
-    description: "Onboarding, setup, and first steps.",
-  },
-  {
-    title: "Technical",
-    href: "#",
-    icon: "code",
-    description: "API, integrations, and troubleshooting.",
-  },
-  {
-    title: "Billing",
-    href: "#",
-    icon: "payments",
-    description: "Invoices, plans, and payment methods.",
-  },
-];
+export const categories: Category[] = [];

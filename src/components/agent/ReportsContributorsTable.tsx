@@ -1,7 +1,7 @@
 import { Star, MoreVertical, ChevronRight } from "lucide-react";
-import { REPORTS_CONTRIBUTORS } from "@/src/data/agentReports";
+import type { ReportContributor } from "@/src/constants/agentReports";
 
-export function ReportsContributorsTable() {
+export function ReportsContributorsTable({ contributors }: { contributors: ReportContributor[] }) {
   return (
     <div className="overflow-hidden rounded-xl border border-outline-variant bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
       <div className="flex items-center justify-between border-b border-outline-variant px-6 py-5">
@@ -35,9 +35,15 @@ export function ReportsContributorsTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-outline-variant">
-            {REPORTS_CONTRIBUTORS.map((agent) => (
+            {contributors.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-8 text-center text-body-md text-secondary">
+                  No agent performance data available.
+                </td>
+              </tr>
+            ) : contributors.map((agent) => (
               <tr
-                key={agent.name}
+                key={agent.id}
                 className="group transition-colors hover:bg-surface-container-low"
               >
                 <td className="px-6 py-4">
@@ -66,7 +72,7 @@ export function ReportsContributorsTable() {
                       fill="currentColor"
                     />
                     <span className="font-body-md text-body-md font-semibold">
-                      {agent.rating}
+                      {agent.rating ?? "—"}
                     </span>
                   </div>
                 </td>

@@ -1,6 +1,6 @@
 import { MoreHorizontal } from "lucide-react";
 import { TicketCard } from "./TicketCard";
-import type { KanbanColumnData } from "@/src/data/agentTickets";
+import type { KanbanColumnData } from "@/src/constants/agentTickets";
 
 interface KanbanColumnProps {
   column: KanbanColumnData;

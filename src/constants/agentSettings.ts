@@ -14,12 +14,12 @@ export interface SettingsSubNavItem {
 }
 
 export const AGENT_PROFILE: AgentProfile = {
-  name: "Alex Rivera",
-  email: "alex.rivera@kinetic.io",
-  role: "Senior Support Agent",
-  department: "Enterprise Support",
-  bio: "Specializing in API integrations and enterprise SLA management.",
-  avatarUrl: "https://i.pravatar.cc/150?u=alex",
+  name: "",
+  email: "",
+  role: "",
+  department: "",
+  bio: "",
+  avatarUrl: "",
 };
 
 export const JOB_ROLES = [

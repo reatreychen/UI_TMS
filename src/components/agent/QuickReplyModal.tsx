@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { X, HelpCircle, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, HelpCircle, Check, Loader2 } from "lucide-react";
+import { useAppSelector } from "@/src/store/hooks";
+import { selectUser } from "@/src/store/slices/authSlice";
+import { fetchTicketComments, createTicketComment } from "@/src/services/portalService";
 
 interface QuickReplyModalProps {
   isOpen: boolean;
@@ -33,8 +36,34 @@ export function QuickReplyModal({
   onClose,
   ticketId,
 }: QuickReplyModalProps) {
+  const currentUser = useAppSelector(selectUser);
   const [replyText, setReplyText] = useState("");
   const [selectedCanned, setSelectedCanned] = useState<string | null>(null);
+  const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && ticketId) {
+      setIsLoading(true);
+      fetchTicketComments(ticketId)
+        .then((comments) => {
+          if (comments && comments.length > 0) {
+            // Get the most recent comment
+            const last = comments[comments.length - 1];
+            setLastMessage(last.message);
+          } else {
+            setLastMessage("No previous messages.");
+          }
+        })
+        .catch(() => setLastMessage("Failed to load messages."))
+        .finally(() => setIsLoading(false));
+    } else {
+      setLastMessage(null);
+      setReplyText("");
+      setSelectedCanned(null);
+    }
+  }, [isOpen, ticketId]);
 
   if (!isOpen) return null;
 
@@ -48,6 +77,24 @@ export function QuickReplyModal({
     setSelectedCanned(null);
   };
 
+  const handleSend = async () => {
+    if (!replyText.trim() || !currentUser?.id) return;
+    setIsSending(true);
+    try {
+      await createTicketComment({
+        ticketId,
+        userId: currentUser.id,
+        message: replyText,
+        isInternal: false,
+      });
+      onClose(); // Close modal on success
+    } catch (err) {
+      console.error("Failed to send reply", err);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-2xl">
@@ -58,7 +105,7 @@ export function QuickReplyModal({
               #{ticketId}
             </span>
             <h3 className="text-body-lg font-bold text-on-surface">
-              Critical Database Latency in EU-West-1 Instance
+              Reply to Ticket
             </h3>
           </div>
           <button
@@ -76,10 +123,15 @@ export function QuickReplyModal({
             <p className="mb-1 text-label-md font-bold uppercase text-on-surface-variant">
               Last Message
             </p>
-            <p className="text-body-md italic text-on-surface">
-              "The database is timing out every 30 seconds. We need an immediate
-              fix as this is affecting our production environment in Europe."
-            </p>
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-body-md text-on-surface-variant">
+                <Loader2 className="size-4 animate-spin" /> Loading...
+              </div>
+            ) : (
+              <p className="text-body-md italic text-on-surface whitespace-pre-wrap">
+                {lastMessage || "No messages found."}
+              </p>
+            )}
           </div>
 
           {/* Canned Responses */}
@@ -165,12 +217,18 @@ export function QuickReplyModal({
         <div className="flex justify-end gap-3 border-t border-outline-variant bg-surface-container-low px-6 py-4">
           <button
             onClick={onClose}
-            className="rounded-lg px-4 py-2 text-label-md font-bold text-on-surface-variant transition-colors hover:bg-surface-container-high"
+            disabled={isSending}
+            className="rounded-lg px-4 py-2 text-label-md font-bold text-on-surface-variant transition-colors hover:bg-surface-container-high disabled:opacity-50"
           >
             Cancel
           </button>
-          <button className="rounded-lg bg-primary px-6 py-2 text-label-md font-bold text-on-primary shadow-lg shadow-primary/20 transition-all hover:bg-surface-tint active:scale-95">
-            Send Reply
+          <button
+            onClick={handleSend}
+            disabled={!replyText.trim() || isSending}
+            className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 text-label-md font-bold text-on-primary shadow-lg shadow-primary/20 transition-all hover:bg-surface-tint active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+          >
+            {isSending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {isSending ? "Sending..." : "Send Reply"}
           </button>
         </div>
       </div>

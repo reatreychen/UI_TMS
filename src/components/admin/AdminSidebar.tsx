@@ -10,10 +10,14 @@ export function AdminSidebar() {
     { name: "Overview", href: "/admin/dashboard", icon: "dashboard" },
     { name: "User Management", href: "/admin/users", icon: "group" },
     { name: "Agent Management", href: "/admin/departments", icon: "support_agent" },
-    { name: "Ticket Management", href: "/admin/categories", icon: "confirmation_number" },
+    { name: "Permissions", href: "/admin/permissions", icon: "admin_panel_settings" },
+    { name: "Categories", href: "/admin/categories", icon: "category" },
+    { name: "Ticket Management", href: "/admin/ticket-management", icon: "confirmation_number" },
     { name: "Reports", href: "/admin/reports", icon: "assessment" },
     { name: "Audit Logs", href: "/admin/audit-logs", icon: "analytics" },
-    { name: "Permissions", href: "/admin/permissions", icon: "admin_panel_settings" },
+    { name: "Knowledge Base", href: "/admin/knowledge-base", icon: "lightbulb" },
+    { name: "Manage Resources", href: "/admin/resources", icon: "folder_managed" },
+    { name: "Pricing Plans", href: "/admin/pricing-plans", icon: "payments" },
   ];
 
   return (
@@ -49,7 +53,7 @@ export function AdminSidebar() {
             </Link>
           );
         })}
-      </nav>
+      </nav>  
 
       {/* Bottom Footer Actions */}
       <div className="mt-auto pt-stack-md border-t border-outline-variant space-y-1">

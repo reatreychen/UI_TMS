@@ -1,6 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import {
+  downloadReport,
+  fetchAdminReportAnalytics,
+  generateReport,
+  type AdminReportAnalytics,
+} from "@/src/services/reportService";
+
+function formatHours(hours: number | null) {
+  if (hours === null) return "—";
+
+  const wholeHours = Math.floor(hours);
+  const minutes = Math.round((hours - wholeHours) * 60);
+  return `${wholeHours}h ${minutes}m`;
+}
+
+function buildChartPath(points: Array<{ x: number; y: number }>) {
+  return points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
+}
 
 export default function ReportsPage() {
   const [dateRange, setDateRange] = useState("Last 30 Days");
@@ -11,25 +29,38 @@ export default function ReportsPage() {
   const [toastMessage, setToastMessage] = useState("");
   const [isExportingCSV, setIsExportingCSV] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [reportData, setReportData] = useState<AdminReportAnalytics | null>(null);
+  const [reportError, setReportError] = useState("");
 
-  // Dynamic KPI metrics based on selected filter
-  const kpiData = {
-    "Last 30 Days": { sla: "94.2%", slaDiff: "+2.4%", resTime: "4h 12m", resDiff: "-12m", cost: "$18.50", csat: "4.8" },
-    "Last Quarter": { sla: "95.6%", slaDiff: "+3.1%", resTime: "3h 45m", resDiff: "-25m", cost: "$17.20", csat: "4.9" },
-    "Year to Date": { sla: "93.8%", slaDiff: "+1.8%", resTime: "4h 30m", resDiff: "-5m", cost: "$19.10", csat: "4.7" },
-    "Custom Range": { sla: "94.0%", slaDiff: "+2.0%", resTime: "4h 00m", resDiff: "-10m", cost: "$18.00", csat: "4.8" },
+  const currentKPI = {
+    sla: reportData?.slaCompliance === null || reportData?.slaCompliance === undefined
+      ? "—"
+      : `${reportData.slaCompliance}%`,
+    slaDiff: reportData ? "API" : "—",
+    resTime: formatHours(reportData?.averageResolutionHours ?? null),
+    resDiff: reportData ? "API" : "—",
+    cost: "—",
+    csat: "—",
   };
 
-  const currentKPI = kpiData[dateRange as keyof typeof kpiData] || kpiData["Last 30 Days"];
-
   // Data points for interactive SVG chart
-  const dataPoints = [
-    { day: "Oct 01", volume: 240, resolved: 220, x: 0, y: 250 },
-    { day: "Oct 08", volume: 380, resolved: 310, x: 250, y: 220 },
-    { day: "Oct 15", volume: 520, resolved: 480, x: 500, y: 140 },
-    { day: "Oct 22", volume: 460, resolved: 440, x: 750, y: 160 },
-    { day: "Oct 31", volume: 680, resolved: 650, x: 1000, y: 40 },
-  ];
+  const maxVolume = Math.max(...(reportData?.volume.map((point) => point.newTickets) || [1]), 1);
+  const dataPoints = reportData?.volume.map((point, index, points) => ({
+    day: point.label,
+    volume: point.newTickets,
+    resolved: point.resolved,
+    x: points.length > 1 ? (index / (points.length - 1)) * 1000 : 0,
+    y: 260 - (point.newTickets / maxVolume) * 220,
+    resolvedY: 260 - (point.resolved / maxVolume) * 220,
+  })) || [];
+  const volumePath = buildChartPath(dataPoints);
+  const resolvedPath = buildChartPath(dataPoints.map((point) => ({ x: point.x, y: point.resolvedY })));
+
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3500);
+  };
 
   // Listen to global admin header search
   useEffect(() => {
@@ -44,34 +75,63 @@ export default function ReportsPage() {
     return () => window.removeEventListener("admin-search", handleSearch);
   }, []);
 
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3500);
-  };
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReportData() {
+      setIsApplying(true);
+      setReportError("");
+
+      try {
+        const data = await fetchAdminReportAnalytics(dateRange, department);
+        if (!cancelled) setReportData(data);
+      } catch (error) {
+        if (!cancelled) {
+          setReportError(error instanceof Error ? error.message : "Could not load report data.");
+        }
+      } finally {
+        if (!cancelled) setIsApplying(false);
+      }
+    }
+
+    void loadReportData();
+    return () => {
+      cancelled = true;
+    };
+  }, [dateRange, department]);
 
   const handleApplyFilters = () => {
-    setIsApplying(true);
-    setTimeout(() => {
-      setIsApplying(false);
-      triggerToast(`Analytics updated for ${dateRange} (${department}).`);
-    }, 600);
+    triggerToast(`Analytics updated for ${dateRange} (${department}).`);
   };
 
   const handleExportCSV = () => {
-    setIsExportingCSV(true);
-    setTimeout(() => {
-      setIsExportingCSV(false);
-      triggerToast("CSV performance report generated & downloaded.");
-    }, 800);
+    void generateAndDownloadReport("CSV");
   };
 
   const handleExportPDF = () => {
-    setIsExportingPDF(true);
-    setTimeout(() => {
-      setIsExportingPDF(false);
-      triggerToast("Executive PDF report generated & downloaded.");
-    }, 1000);
+    void generateAndDownloadReport("PDF");
+  };
+
+  const generateAndDownloadReport = async (format: "CSV" | "PDF") => {
+    if (format === "CSV") setIsExportingCSV(true);
+    else setIsExportingPDF(true);
+
+    try {
+      const report = await generateReport(format, { dateRange, department });
+      const blob = await downloadReport(report.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `performance-analytics.${format.toLowerCase()}`;
+      link.click();
+      URL.revokeObjectURL(url);
+      triggerToast(`${format} performance report generated & downloaded.`);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Could not export report.");
+    } finally {
+      if (format === "CSV") setIsExportingCSV(false);
+      else setIsExportingPDF(false);
+    }
   };
 
   return (
@@ -129,6 +189,12 @@ export default function ReportsPage() {
           </button>
         </div>
       </section>
+
+      {reportError && (
+        <div className="bg-error-container/20 border border-error/30 text-error px-4 py-3 rounded-lg text-body-md">
+          {reportError}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -227,7 +293,7 @@ export default function ReportsPage() {
             {/* Resolution Line (Dotted) */}
             <path
               className="opacity-70"
-              d="M0,220 Q100,240 200,180 T400,150 T600,100 T800,130 T1000,80"
+              d={resolvedPath}
               fill="none"
               stroke="#d0e1fb"
               strokeDasharray="8 4"
@@ -236,7 +302,7 @@ export default function ReportsPage() {
             {/* Volume Line (Solid Primary) */}
             <path
               className="drop-shadow-lg"
-              d="M0,250 Q120,200 250,220 T500,140 T750,160 T1000,40"
+              d={volumePath}
               fill="none"
               stroke="#004ac6"
               strokeWidth="5"
@@ -293,25 +359,23 @@ export default function ReportsPage() {
             Efficiency by Department
           </h3>
           <div className="space-y-6">
-            {[
-              { dept: "Support", pct: "88%", val: 88 },
-              { dept: "Technical", pct: "74%", val: 74 },
-              { dept: "Billing", pct: "92%", val: 92 },
-              { dept: "Sales", pct: "65%", val: 65 },
-            ].map((item) => (
-              <div key={item.dept} className="space-y-2">
+            {(reportData?.departmentPerformance || []).map((item) => (
+              <div key={item.department} className="space-y-2">
                 <div className="flex justify-between font-label-md">
-                  <span className="text-on-surface font-semibold">{item.dept}</span>
-                  <span className="text-primary font-bold">{item.pct}</span>
+                  <span className="text-on-surface font-semibold">{item.department}</span>
+                  <span className="text-primary font-bold">{item.percentage}%</span>
                 </div>
                 <div className="h-3 bg-surface-container-low rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary rounded-full transition-all duration-500"
-                    style={{ width: `${item.val}%` }}
+                    style={{ width: `${item.percentage}%` }}
                   />
                 </div>
               </div>
             ))}
+            {!reportData?.departmentPerformance.length && !isApplying && (
+              <p className="text-body-md text-secondary">No department data available.</p>
+            )}
           </div>
         </div>
 
@@ -331,46 +395,29 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/30 text-body-md">
-                <tr>
-                  <td className="py-4">
-                    <span className="bg-red-50 text-red-600 text-[10px] font-bold px-2 py-1 rounded uppercase">
-                      Critical
-                    </span>
-                  </td>
-                  <td className="py-4 text-center font-body-md">142</td>
-                  <td className="py-4 text-center font-body-md text-error font-semibold">4</td>
-                  <td className="py-4 text-right font-bold text-green-600">97.3%</td>
-                </tr>
-                <tr>
-                  <td className="py-4">
-                    <span className="bg-orange-50 text-orange-600 text-[10px] font-bold px-2 py-1 rounded uppercase">
-                      High
-                    </span>
-                  </td>
-                  <td className="py-4 text-center font-body-md">288</td>
-                  <td className="py-4 text-center font-body-md">18</td>
-                  <td className="py-4 text-right font-bold text-green-600">94.1%</td>
-                </tr>
-                <tr>
-                  <td className="py-4">
-                    <span className="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-1 rounded uppercase">
-                      Medium
-                    </span>
-                  </td>
-                  <td className="py-4 text-center font-body-md">512</td>
-                  <td className="py-4 text-center font-body-md">56</td>
-                  <td className="py-4 text-right font-bold text-amber-600">90.1%</td>
-                </tr>
-                <tr>
-                  <td className="py-4">
-                    <span className="bg-gray-50 text-gray-600 text-[10px] font-bold px-2 py-1 rounded uppercase">
-                      Low
-                    </span>
-                  </td>
-                  <td className="py-4 text-center font-body-md">844</td>
-                  <td className="py-4 text-center font-body-md">112</td>
-                  <td className="py-4 text-right font-bold text-red-600">88.3%</td>
-                </tr>
+                {(reportData?.slaByPriority || []).map((item) => {
+                  const priorityStyles = {
+                    CRITICAL: "bg-red-50 text-red-600",
+                    HIGH: "bg-orange-50 text-orange-600",
+                    MEDIUM: "bg-blue-50 text-blue-600",
+                    LOW: "bg-gray-50 text-gray-600",
+                  }[item.priority] || "bg-surface-container text-secondary";
+
+                  return (
+                    <tr key={item.priority}>
+                      <td className="py-4">
+                        <span className={`${priorityStyles} text-[10px] font-bold px-2 py-1 rounded uppercase`}>
+                          {item.priority}
+                        </span>
+                      </td>
+                      <td className="py-4 text-center font-body-md">{item.met}</td>
+                      <td className="py-4 text-center font-body-md text-error font-semibold">{item.breached}</td>
+                      <td className="py-4 text-right font-bold text-green-600">
+                        {item.successRate === null ? "—" : `${item.successRate}%`}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

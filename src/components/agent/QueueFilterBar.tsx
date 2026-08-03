@@ -1,6 +1,14 @@
-import { RefreshCcw, Download } from "lucide-react";
+"use client";
 
-export function QueueFilterBar() {
+import { Download, Loader2, RefreshCcw } from "lucide-react";
+
+interface QueueFilterBarProps {
+  ticketCount: number;
+  loading: boolean;
+  onRefresh: () => void;
+}
+
+export function QueueFilterBar({ ticketCount, loading, onRefresh }: QueueFilterBarProps) {
   return (
     <div className="flex flex-col gap-stack-md">
       {/* Header Section */}
@@ -10,13 +18,18 @@ export function QueueFilterBar() {
             Ticket Queue
           </h2>
           <p className="font-body-md text-secondary">
-            42 unassigned tickets in the pool
+            {ticketCount} unassigned {ticketCount === 1 ? "ticket" : "tickets"} in the pool
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-2 text-body-md font-medium transition-colors hover:bg-surface-container-low">
-            <RefreshCcw aria-hidden className="size-5" />
-            Refresh
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-2 text-body-md font-medium transition-colors hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? <Loader2 aria-hidden className="size-5 animate-spin" /> : <RefreshCcw aria-hidden className="size-5" />}
+            {loading ? "Loading" : "Refresh"}
           </button>
           <button className="flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-2 text-body-md font-medium transition-colors hover:bg-surface-container-low">
             <Download aria-hidden className="size-5" />

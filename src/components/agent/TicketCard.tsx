@@ -1,5 +1,5 @@
 import Image from "next/image";
-import type { TicketCardData } from "@/src/data/agentTickets";
+import type { TicketCardData } from "@/src/constants/agentTickets";
 
 interface TicketCardProps {
   ticket: TicketCardData;

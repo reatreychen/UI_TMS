@@ -1,6 +1,6 @@
 import { TicketCheck, Users } from "lucide-react";
 import Link from "next/link";
-import { trendingDiscussions, docLinks } from "@/src/data/knowledgeBase";
+import { trendingDiscussions, docLinks } from "@/src/constants/knowledgeBase";
 
 export function KnowledgeSidebar() {
   return (

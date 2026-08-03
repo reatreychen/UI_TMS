@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -9,11 +11,25 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { AGENT_MY_TICKETS } from "@/src/data/agentMyTickets";
-import type { AgentTicketRow } from "@/src/data/agentMyTickets";
+import { AGENT_MY_TICKETS } from "@/src/constants/agentMyTickets";
+import type { AgentTicketRow } from "@/src/constants/agentMyTickets";
+
+import { useState, useEffect } from "react";
+import { fetchMyTickets } from "@/src/services/portalService";
+import { formatDistanceToNow } from "date-fns";
 
 export function TicketsTable() {
-  const getPriorityIcon = (priority: AgentTicketRow["priority"]) => {
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchMyTickets({ limit: 50 })
+      .then(data => setTickets(data))
+      .catch(err => console.error("Failed to load agent tickets", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const getPriorityIcon = (priority: string = "medium") => {
     switch (priority) {
       case "critical":
         return (
@@ -64,20 +80,33 @@ export function TicketsTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-outline-variant">
-            {AGENT_MY_TICKETS.map((ticket) => (
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="px-6 py-8 text-center text-on-surface-variant">
+                  Loading tickets...
+                </td>
+              </tr>
+            ) : tickets.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-6 py-8 text-center text-on-surface-variant">
+                  No tickets found.
+                </td>
+              </tr>
+            ) : (
+              tickets.map((ticket) => (
               <tr
                 key={ticket.id}
                 className="ticket-row-hover group cursor-pointer transition-colors hover:bg-surface-container-low"
               >
                 <td className="px-6 py-4" title={`${ticket.priority} Priority`}>
-                  {getPriorityIcon(ticket.priority)}
+                  {getPriorityIcon(ticket.priority?.toLowerCase())}
                 </td>
                 <td className="px-6 py-4">
                   <Link
                     href={`/agent/tickets/${ticket.id}`}
                     className="font-code text-code font-bold text-primary hover:underline"
                   >
-                    #{ticket.id}
+                    #{ticket.ticketNumber || ticket.id.slice(0,8)}
                   </Link>
                 </td>
                 <td className="max-w-xs px-6 py-4">
@@ -85,51 +114,48 @@ export function TicketsTable() {
                     {ticket.subject}
                   </p>
                   <p className="truncate text-label-md text-on-surface-variant">
-                    {ticket.descriptionSnippet}
+                    {ticket.category?.name || "Uncategorized"}
                   </p>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    {ticket.customer.avatarUrl ? (
+                    {ticket.customer?.avatarUrl ? (
                       <Image
                         src={ticket.customer.avatarUrl}
-                        alt={ticket.customer.name}
+                        alt={ticket.customer.fullName || ticket.customer.name || "Customer"}
                         width={32}
                         height={32}
                         className="h-8 w-8 rounded-full object-cover"
                       />
                     ) : (
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary-container text-[10px] font-bold text-on-secondary-container">
-                        {ticket.customer.initials}
+                        {(ticket.customer?.fullName || ticket.customer?.name || "C").substring(0,2).toUpperCase()}
                       </div>
                     )}
                     <span className="text-body-md font-medium">
-                      {ticket.customer.name}
+                      {ticket.customer?.fullName || ticket.customer?.name || "Unknown Customer"}
                     </span>
                   </div>
                 </td>
                 <td className="px-6 py-4">
                   <span
-                    className={`rounded-full px-2.5 py-1 text-label-md font-bold ${ticket.statusColors.bg} ${ticket.statusColors.text}`}
+                    className={`rounded-full px-2.5 py-1 text-label-md font-bold bg-surface-container-high text-on-surface-variant`}
                   >
-                    {ticket.status}
+                    {ticket.status?.replace(/_/g, " ") || "UNKNOWN"}
                   </span>
                 </td>
                 <td className="text-body-md text-on-surface-variant px-6 py-4">
-                  {ticket.lastActivity}
+                  {formatDistanceToNow(new Date(ticket.updatedAt || ticket.createdAt), { addSuffix: true })}
                 </td>
                 <td className="px-6 py-4">
                   <div className="row-actions flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button className="p-1 transition-colors hover:text-primary">
+                    <Link href={`/agent/tickets/${ticket.id}`} className="p-1 transition-colors hover:text-primary">
                       <Edit aria-hidden className="size-5" />
-                    </button>
-                    <button className="p-1 transition-colors hover:text-primary">
-                      <MoreVertical aria-hidden className="size-5" />
-                    </button>
+                    </Link>
                   </div>
                 </td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>
@@ -137,8 +163,8 @@ export function TicketsTable() {
       {/* Pagination Footer */}
       <div className="flex items-center justify-between border-t border-outline-variant bg-surface-container-low px-6 py-4">
         <p className="text-label-md text-on-surface-variant">
-          Showing <span className="font-bold">1-{AGENT_MY_TICKETS.length}</span>{" "}
-          of {AGENT_MY_TICKETS.length} tickets
+          Showing <span className="font-bold">{tickets.length > 0 ? 1 : 0}-{tickets.length}</span>{" "}
+          of {tickets.length} tickets
         </p>
         <div className="flex items-center gap-2">
           <button

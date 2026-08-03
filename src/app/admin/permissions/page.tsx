@@ -1,29 +1,35 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { adminRoleService, AdminPermission } from "@/src/services/adminRoleService";
+import { AdminRole } from "@/src/services/adminUserService";
+import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
+import { fetchPermissionsThunk } from "@/src/store/slices/permissionSlice";
 
-interface RoleRecord {
-  id: string;
-  name: string;
-  badge: "DEFAULT" | "CUSTOM";
-  description: string;
-  usersAssigned: number;
-  lastModified: string;
-}
-
-interface PermissionItem {
-  id: string;
-  title: string;
-  desc: string;
-  enabled: boolean;
-  isDangerous?: boolean;
+function getErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string | string[] } } }).response;
+    const message = response?.data?.message;
+    if (Array.isArray(message)) return message.join(", ");
+    if (typeof message === "string") return message;
+  }
+  if (error instanceof Error) return error.message;
+  return "An unexpected error occurred.";
 }
 
 export default function PermissionsPage() {
-  const [selectedRole, setSelectedRole] = useState<string>("Support Manager");
-  const [selectedModule, setSelectedModule] = useState<string>("Ticket Management");
+  const dispatch = useAppDispatch();
+  const { permissions: allPermissions } = useAppSelector((state) => state.permission);
+
+  const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [selectedRole, setSelectedRole] = useState<AdminRole | null>(null);
+  const [selectedRolePermissionIds, setSelectedRolePermissionIds] = useState<Set<string>>(new Set());
+  const [selectedModule, setSelectedModule] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(true);
+
   const [enableAll, setEnableAll] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -32,68 +38,64 @@ export default function PermissionsPage() {
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDesc, setNewRoleDesc] = useState("");
 
-  // Initial Roles Dataset matching HTML mockup
-  const initialRoles: RoleRecord[] = [
-    {
-      id: "ROLE-1",
-      name: "Super Admin",
-      badge: "DEFAULT",
-      description: "Unrestricted access to all system modules and data.",
-      usersAssigned: 2,
-      lastModified: "Oct 12, 2023",
-    },
-    {
-      id: "ROLE-2",
-      name: "Support Manager",
-      badge: "DEFAULT",
-      description: "Management of ticket flows, reporting, and agent shifts.",
-      usersAssigned: 5,
-      lastModified: "Nov 04, 2023",
-    },
-    {
-      id: "ROLE-3",
-      name: "Senior Agent",
-      badge: "DEFAULT",
-      description: "Primary ticket handling with escalation permissions.",
-      usersAssigned: 24,
-      lastModified: "Dec 01, 2023",
-    },
-    {
-      id: "ROLE-4",
-      name: "Junior Agent",
-      badge: "DEFAULT",
-      description: "Basic ticket entry and customer communication access.",
-      usersAssigned: 56,
-      lastModified: "Dec 01, 2023",
-    },
-    {
-      id: "ROLE-5",
-      name: "Billing Specialist",
-      badge: "CUSTOM",
-      description: "Access to invoices, credit memos, and payment processing.",
-      usersAssigned: 3,
-      lastModified: "Jan 15, 2024",
-    },
-  ];
+  // Edit Role Form
+  const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
+  const [editRoleName, setEditRoleName] = useState("");
+  const [editRoleDesc, setEditRoleDesc] = useState("");
 
-  const [roles, setRoles] = useState<RoleRecord[]>(initialRoles);
+  const modules = useMemo(() => {
+    const mods = new Set(allPermissions.map((p) => p.module));
+    return Array.from(mods).sort();
+  }, [allPermissions]);
 
-  // Permission Matrix State
-  const [ticketPermissions, setTicketPermissions] = useState<PermissionItem[]>([
-    { id: "read", title: "Read Access", desc: "View all tickets in assigned department", enabled: true },
-    { id: "create", title: "Create Ticket", desc: "Initiate new ticket workflows", enabled: true },
-    { id: "edit", title: "Edit Ticket", desc: "Modify metadata and priority levels", enabled: true },
-    { id: "assign", title: "Assign Tasks", desc: "Delegate tickets to other agents", enabled: true },
-    { id: "bulk", title: "Bulk Actions", desc: "Batch edit and resolve operations", enabled: true },
-    { id: "delete", title: "Permanent Delete", desc: "Bypass archive and purge record", enabled: false, isDangerous: true },
-  ]);
+  const permissionsByModule = useMemo(() => {
+    const map = new Map<string, AdminPermission[]>();
+    allPermissions.forEach((p) => {
+      const list = map.get(p.module) || [];
+      list.push(p);
+      map.set(p.module, list);
+    });
+    return map;
+  }, [allPermissions]);
 
-  const [userPermissions, setUserPermissions] = useState<PermissionItem[]>([
-    { id: "invite", title: "Invite Agents", desc: "Add new support staff to organization", enabled: true },
-    { id: "reset_pwd", title: "Reset Passwords", desc: "Force credentials reset for team", enabled: true },
-  ]);
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
 
-  // Listen to global admin header search
+  const fetchInitialData = async () => {
+    try {
+      const [fetchedRoles, actionResult] = await Promise.all([
+        adminRoleService.getRoles(),
+        dispatch(fetchPermissionsThunk())
+      ]);
+      setRoles(fetchedRoles);
+      
+      if (fetchedRoles.length > 0) {
+        setSelectedRole(fetchedRoles[0]);
+      }
+      
+      const fetchedPermissions = actionResult.payload as AdminPermission[];
+      if (fetchedPermissions && Array.isArray(fetchedPermissions)) {
+        const mods = Array.from(new Set(fetchedPermissions.map(p => p.module)));
+        if (mods.length > 0) {
+          setSelectedModule(mods.sort()[0]);
+        }
+      }
+    } catch (err) {
+      triggerToast("Failed to fetch data.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedRole) {
+      adminRoleService.getRolePermissions(selectedRole.id).then((perms) => {
+        setSelectedRolePermissionIds(new Set(perms.map(p => p.id)));
+      });
+    }
+  }, [selectedRole]);
+
   useEffect(() => {
     const handleSearch = (e: Event) => {
       const customEvt = e as CustomEvent<string>;
@@ -112,60 +114,110 @@ export default function PermissionsPage() {
     setTimeout(() => setShowToast(false), 3500);
   };
 
-  const handleTogglePermission = (type: "ticket" | "user", id: string) => {
-    if (type === "ticket") {
-      setTicketPermissions(
-        ticketPermissions.map((p) => (p.id === id ? { ...p, enabled: !p.enabled } : p))
-      );
+  const handleTogglePermission = (id: string) => {
+    const nextSet = new Set(selectedRolePermissionIds);
+    if (nextSet.has(id)) {
+      nextSet.delete(id);
     } else {
-      setUserPermissions(
-        userPermissions.map((p) => (p.id === id ? { ...p, enabled: !p.enabled } : p))
-      );
+      nextSet.add(id);
     }
+    setSelectedRolePermissionIds(nextSet);
   };
 
   const handleEnableAllToggle = () => {
     const nextState = !enableAll;
     setEnableAll(nextState);
-    setTicketPermissions(ticketPermissions.map((p) => ({ ...p, enabled: nextState })));
-    setUserPermissions(userPermissions.map((p) => ({ ...p, enabled: nextState })));
-    triggerToast(nextState ? "All module permissions enabled." : "All module permissions disabled.");
+    if (nextState) {
+      setSelectedRolePermissionIds(new Set(allPermissions.map(p => p.id)));
+    } else {
+      setSelectedRolePermissionIds(new Set());
+    }
+    triggerToast(nextState ? "All permissions enabled." : "All permissions disabled.");
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
+    if (!selectedRole) return;
     setIsSaving(true);
-    setTimeout(() => {
+    try {
+      await adminRoleService.replaceRolePermissions(selectedRole.id, Array.from(selectedRolePermissionIds));
+      triggerToast(`Permission matrix saved for role '${selectedRole.name}'. Audit trail logged.`);
+    } catch (error) {
+      triggerToast("Failed to save permissions.");
+    } finally {
       setIsSaving(false);
-      triggerToast(`Permission matrix saved for role '${selectedRole}'. Audit trail logged.`);
-    }, 800);
+    }
   };
 
   const handleResetPermissions = () => {
-    setTicketPermissions(ticketPermissions.map((p) => ({ ...p, enabled: !p.isDangerous })));
-    setUserPermissions(userPermissions.map((p) => ({ ...p, enabled: true })));
-    triggerToast(`Permissions reset to default policies for '${selectedRole}'.`);
+    if (selectedRole) {
+      adminRoleService.getRolePermissions(selectedRole.id).then((perms) => {
+        setSelectedRolePermissionIds(new Set(perms.map(p => p.id)));
+        triggerToast(`Permissions reset to saved state for '${selectedRole.name}'.`);
+      });
+    }
   };
 
-  const handleCreateRoleSubmit = (e: React.FormEvent) => {
+  const handleCreateRoleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRoleName.trim()) return;
 
-    const newRole: RoleRecord = {
-      id: `ROLE-${roles.length + 1}`,
-      name: newRoleName.trim(),
-      badge: "CUSTOM",
-      description: newRoleDesc.trim() || "Custom security boundary policy.",
-      usersAssigned: 0,
-      lastModified: "Just now",
-    };
-
-    setRoles([...roles, newRole]);
-    setSelectedRole(newRole.name);
-    setNewRoleName("");
-    setNewRoleDesc("");
-    setShowCreateModal(false);
-    triggerToast(`Custom role '${newRole.name}' created!`);
+    try {
+      const newRole = await adminRoleService.createRole({
+        name: newRoleName.trim(),
+        description: newRoleDesc.trim(),
+      });
+      setRoles([...roles, newRole]);
+      setSelectedRole(newRole);
+      setNewRoleName("");
+      setNewRoleDesc("");
+      setShowCreateModal(false);
+      triggerToast(`Role '${newRole.name}' created!`);
+    } catch (error) {
+       triggerToast(getErrorMessage(error) || "Failed to create role.");
+    }
   };
+
+  const handleEditRoleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editRoleName.trim() || !editingRole) return;
+
+    try {
+      const updated = await adminRoleService.updateRole(editingRole.id, {
+        name: editRoleName.trim(),
+        description: editRoleDesc.trim(),
+      });
+      setRoles(roles.map((r) => (r.id === editingRole.id ? updated : r)));
+      if (selectedRole?.id === editingRole.id) {
+        setSelectedRole(updated);
+      }
+      setShowEditModal(false);
+      setEditingRole(null);
+      triggerToast(`Role '${updated.name}' updated!`);
+    } catch (error) {
+      triggerToast(getErrorMessage(error) || "Failed to update role.");
+    }
+  };
+
+  const handleDeleteRole = async (role: AdminRole, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(`Are you sure you want to delete the role ${role.name}?`)) {
+      try {
+        await adminRoleService.deleteRole(role.id);
+        const newRoles = roles.filter(r => r.id !== role.id);
+        setRoles(newRoles);
+        if (selectedRole?.id === role.id) {
+           setSelectedRole(newRoles[0] || null);
+        }
+        triggerToast(`Deleted role '${role.name}'`);
+      } catch (error) {
+        triggerToast("Failed to delete role. It may be in use.");
+      }
+    }
+  };
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-on-surface">Loading configurations...</div>;
+  }
 
   return (
     <div className="space-y-stack-lg max-w-[1440px] mx-auto w-full animate-in fade-in duration-300">
@@ -190,7 +242,6 @@ export default function PermissionsPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter">
-        {/* Total Roles */}
         <div className="bg-surface-container-lowest p-stack-md rounded-xl border border-outline-variant flex items-center gap-4 shadow-xs hover:shadow-md transition-shadow">
           <div className="bg-primary/10 p-3 rounded-lg">
             <span className="material-symbols-outlined text-primary">groups</span>
@@ -205,7 +256,6 @@ export default function PermissionsPage() {
           </div>
         </div>
 
-        {/* Active Permissions */}
         <div className="bg-surface-container-lowest p-stack-md rounded-xl border border-outline-variant flex items-center gap-4 shadow-xs hover:shadow-md transition-shadow">
           <div className="bg-secondary-container p-3 rounded-lg">
             <span className="material-symbols-outlined text-on-secondary-container">vpn_key</span>
@@ -214,35 +264,7 @@ export default function PermissionsPage() {
             <p className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider font-semibold">
               Active Permissions
             </p>
-            <p className="text-headline-md font-headline-md text-on-surface font-bold">124</p>
-          </div>
-        </div>
-
-        {/* Custom Roles */}
-        <div className="bg-surface-container-lowest p-stack-md rounded-xl border border-outline-variant flex items-center gap-4 shadow-xs hover:shadow-md transition-shadow">
-          <div className="bg-surface-variant p-3 rounded-lg">
-            <span className="material-symbols-outlined text-on-surface-variant">edit_attributes</span>
-          </div>
-          <div>
-            <p className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider font-semibold">
-              Custom Roles
-            </p>
-            <p className="text-headline-md font-headline-md text-on-surface font-bold">
-              {roles.filter((r) => r.badge === "CUSTOM").length}
-            </p>
-          </div>
-        </div>
-
-        {/* Security Audit */}
-        <div className="bg-surface-container-lowest p-stack-md rounded-xl border border-outline-variant flex items-center gap-4 shadow-xs hover:shadow-md transition-shadow">
-          <div className="bg-green-100 p-3 rounded-lg">
-            <span className="material-symbols-outlined text-green-700">verified_user</span>
-          </div>
-          <div>
-            <p className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider font-semibold">
-              Security Audit
-            </p>
-            <p className="text-headline-md font-headline-md text-green-700 font-bold">Compliant</p>
+            <p className="text-headline-md font-headline-md text-on-surface font-bold">{allPermissions.length}</p>
           </div>
         </div>
       </div>
@@ -260,12 +282,6 @@ export default function PermissionsPage() {
             >
               <span className="material-symbols-outlined text-[18px]">filter_list</span> Filter
             </button>
-            <button
-              onClick={() => triggerToast("Roles configuration exported (JSON).")}
-              className="px-3 py-1.5 border border-outline-variant rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors flex items-center gap-1 cursor-pointer font-medium"
-            >
-              <span className="material-symbols-outlined text-[18px]">download</span> Export
-            </button>
           </div>
         </div>
 
@@ -276,85 +292,63 @@ export default function PermissionsPage() {
                 <th className="px-gutter py-4 font-semibold">Role Name</th>
                 <th className="px-gutter py-4 font-semibold">Description</th>
                 <th className="px-gutter py-4 text-center font-semibold">Users Assigned</th>
-                <th className="px-gutter py-4 font-semibold">Last Modified</th>
                 <th className="px-gutter py-4 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant font-body-md text-body-md">
               {roles.map((role) => {
-                const isSelected = selectedRole === role.name;
+                const isSelected = selectedRole?.id === role.id;
+                const isDefault = ["Super Admin", "Support Manager", "Senior Agent", "Junior Agent"].includes(role.name);
                 return (
                   <tr
                     key={role.id}
-                    onClick={() => setSelectedRole(role.name)}
+                    onClick={() => setSelectedRole(role)}
                     className={`transition-colors group cursor-pointer ${
                       isSelected
                         ? "bg-primary/5 border-l-4 border-l-primary font-medium"
                         : "hover:bg-primary/5"
                     }`}
                   >
-                    <td className="px-gutter py-4">
+                    <td className="px-gutter py-4 border-l-[3px] border-l-transparent">
                       <div className="flex items-center gap-3">
                         <span className="font-bold text-on-surface">{role.name}</span>
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                            role.badge === "DEFAULT"
+                            isDefault
                               ? "bg-primary/10 text-primary"
                               : "bg-secondary-container text-on-secondary-container"
                           }`}
                         >
-                          {role.badge}
+                          {isDefault ? "DEFAULT" : "CUSTOM"}
                         </span>
                       </div>
                     </td>
                     <td className="px-gutter py-4 text-on-surface-variant">{role.description}</td>
-                    <td className="px-gutter py-4 text-center font-bold">{role.usersAssigned}</td>
-                    <td className="px-gutter py-4 text-on-surface-variant">{role.lastModified}</td>
+                    <td className="px-gutter py-4 text-center font-bold">-</td>
                     <td className="px-gutter py-4 text-right">
                       <div
                         className={`flex justify-end gap-2 transition-opacity ${
                           isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                         }`}
                       >
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedRole(role.name);
-                            triggerToast(`Editing permissions for role '${role.name}'`);
-                          }}
-                          className="p-1.5 hover:bg-surface-container rounded-lg text-primary cursor-pointer"
-                          title="Edit Permissions"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">edit</span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const clonedName = `${role.name} (Copy)`;
-                            setRoles([
-                              ...roles,
-                              {
-                                ...role,
-                                id: `ROLE-${roles.length + 1}`,
-                                name: clonedName,
-                                badge: "CUSTOM",
-                                lastModified: "Just now",
-                              },
-                            ]);
-                            triggerToast(`Cloned role to '${clonedName}'`);
-                          }}
-                          className="p-1.5 hover:bg-surface-container rounded-lg text-secondary cursor-pointer"
-                          title="Duplicate Role"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">content_copy</span>
-                        </button>
-                        {role.badge === "CUSTOM" && (
+                        {!isDefault && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setRoles(roles.filter((r) => r.id !== role.id));
-                              triggerToast(`Deleted custom role '${role.name}'`);
+                              setEditingRole(role);
+                              setEditRoleName(role.name);
+                              setEditRoleDesc(role.description || "");
+                              setShowEditModal(true);
                             }}
+                            className="p-1.5 hover:bg-surface-container rounded-lg text-primary cursor-pointer"
+                            title="Edit Role"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                          </button>
+                        )}
+                        {!isDefault && (
+                          <button
+                            onClick={(e) => handleDeleteRole(role, e)}
                             className="p-1.5 hover:bg-surface-container rounded-lg text-error cursor-pointer"
                             title="Delete Role"
                           >
@@ -377,18 +371,20 @@ export default function PermissionsPage() {
         <div className="lg:col-span-3 space-y-2">
           <div className="bg-surface-container-lowest p-gutter rounded-xl border border-outline-variant shadow-xs">
             <h4 className="font-bold text-on-surface mb-4">Editing Role:</h4>
-            <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 flex items-center gap-3 mb-6">
-              <span className="material-symbols-outlined text-primary">verified</span>
-              <div>
-                <p className="font-bold text-primary text-body-md leading-none">{selectedRole}</p>
-                <p className="text-[11px] text-on-surface-variant mt-1 italic">
-                  Active Config Session
-                </p>
+            {selectedRole && (
+              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 flex items-center gap-3 mb-6">
+                <span className="material-symbols-outlined text-primary">verified</span>
+                <div>
+                  <p className="font-bold text-primary text-body-md leading-none">{selectedRole.name}</p>
+                  <p className="text-[11px] text-on-surface-variant mt-1 italic">
+                    Active Config Session
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-1">
-              {["Ticket Management", "User Management", "Reporting Suite", "System Policies"].map(
+              {modules.map(
                 (mod) => {
                   const isActive = selectedModule === mod;
                   return (
@@ -401,8 +397,8 @@ export default function PermissionsPage() {
                           : "hover:bg-surface-container text-on-surface-variant font-normal"
                       }`}
                     >
-                      <span>{mod}</span>
-                      <span className="material-symbols-outlined text-sm">chevron_right</span>
+                      <span className="truncate pr-2">{mod.replace(/_/g, ' ')}</span>
+                      <span className="material-symbols-outlined text-sm shrink-0">chevron_right</span>
                     </button>
                   );
                 }
@@ -439,76 +435,44 @@ export default function PermissionsPage() {
           </div>
 
           <div className="p-gutter space-y-6">
-            {/* Module Section: Ticket Management */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-primary font-bold mb-2">
-                <span className="material-symbols-outlined">confirmation_number</span>
-                <span className="uppercase tracking-widest text-[11px]">Ticket Management</span>
+            {/* Dynamic Module Section */}
+            {selectedModule && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-primary font-bold mb-2">
+                  <span className="material-symbols-outlined">settings</span>
+                  <span className="uppercase tracking-widest text-[11px]">{selectedModule.replace(/_/g, ' ')}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {permissionsByModule.get(selectedModule)?.map((perm) => {
+                    const isEnabled = selectedRolePermissionIds.has(perm.id);
+                    return (
+                      <div
+                        key={perm.id}
+                        onClick={() => handleTogglePermission(perm.id)}
+                        className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${
+                          isEnabled
+                          ? "border-primary/40 bg-primary/5"
+                          : "border-outline-variant hover:border-outline"
+                        }`}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-bold text-on-surface">
+                            {perm.action}
+                          </span>
+                          <span className="text-[11px] text-on-surface-variant">{perm.module}</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={isEnabled}
+                          readOnly
+                          className="h-5 w-5 text-primary rounded border-outline focus:ring-primary cursor-pointer"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {ticketPermissions.map((perm) => (
-                  <div
-                    key={perm.id}
-                    onClick={() => handleTogglePermission("ticket", perm.id)}
-                    className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${
-                      perm.isDangerous
-                        ? "bg-error-container/10 border-error/30 hover:border-error"
-                        : perm.enabled
-                        ? "border-primary/40 bg-primary/5"
-                        : "border-outline-variant hover:border-outline"
-                    }`}
-                  >
-                    <div className="flex flex-col">
-                      <span className={`font-bold ${perm.isDangerous ? "text-error" : "text-on-surface"}`}>
-                        {perm.title}
-                      </span>
-                      <span className="text-[11px] text-on-surface-variant">{perm.desc}</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={perm.enabled}
-                      onChange={() => handleTogglePermission("ticket", perm.id)}
-                      className={`h-5 w-5 rounded focus:ring-primary cursor-pointer ${
-                        perm.isDangerous ? "text-error focus:ring-error" : "text-primary"
-                      }`}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Divider */}
-            <hr className="border-outline-variant" />
-
-            {/* Module Section: User Management */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-secondary font-bold mb-2">
-                <span className="material-symbols-outlined">person_add</span>
-                <span className="uppercase tracking-widest text-[11px]">User Management</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {userPermissions.map((perm) => (
-                  <div
-                    key={perm.id}
-                    onClick={() => handleTogglePermission("user", perm.id)}
-                    className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${
-                      perm.enabled ? "border-primary/40 bg-primary/5" : "border-outline-variant hover:border-outline"
-                    }`}
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-bold text-on-surface">{perm.title}</span>
-                      <span className="text-[11px] text-on-surface-variant">{perm.desc}</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={perm.enabled}
-                      onChange={() => handleTogglePermission("user", perm.id)}
-                      className="h-5 w-5 text-primary rounded border-outline focus:ring-primary cursor-pointer"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
 
             {/* Divider */}
             <hr className="border-outline-variant" />
@@ -528,7 +492,7 @@ export default function PermissionsPage() {
                 </button>
                 <button
                   onClick={handleSaveChanges}
-                  disabled={isSaving}
+                  disabled={isSaving || !selectedRole}
                   className="px-8 py-2 bg-primary text-on-primary rounded-lg font-bold shadow-lg hover:brightness-110 active:scale-95 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
                 >
                   {isSaving && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
@@ -598,6 +562,77 @@ export default function PermissionsPage() {
                   className="px-5 py-2 text-body-md font-semibold bg-primary text-on-primary rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-sm cursor-pointer"
                 >
                   Create Role
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Role Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-outline-variant pb-3 mb-4">
+              <h3 className="text-headline-md font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">edit</span>
+                Edit Security Role
+              </h3>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingRole(null);
+                }}
+                className="text-outline hover:text-on-surface cursor-pointer"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleEditRoleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-outline uppercase mb-1">
+                  Role Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editRoleName}
+                  onChange={(e) => setEditRoleName(e.target.value)}
+                  placeholder="e.g. Compliance Auditor"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-body-md focus:ring-2 focus:ring-primary outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-outline uppercase mb-1">
+                  Description
+                </label>
+                <textarea
+                  rows={3}
+                  value={editRoleDesc}
+                  onChange={(e) => setEditRoleDesc(e.target.value)}
+                  placeholder="Describe access boundaries and responsibilities for this role..."
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-body-md focus:ring-2 focus:ring-primary outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-outline-variant">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingRole(null);
+                  }}
+                  className="px-4 py-2 text-body-md font-semibold text-secondary hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-body-md font-semibold bg-primary text-on-primary rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-sm cursor-pointer"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

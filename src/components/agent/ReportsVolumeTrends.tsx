@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { REPORTS_VOLUME_WEEKS } from "@/src/data/agentReports";
+import type { ReportVolumeWeek } from "@/src/constants/agentReports";
 
-export function ReportsVolumeTrends() {
+export function ReportsVolumeTrends({ weeks }: { weeks: ReportVolumeWeek[] }) {
   const [tooltip, setTooltip] = useState<{ index: number } | null>(null);
   const maxVal = Math.max(
-    ...REPORTS_VOLUME_WEEKS.map((w) => Math.max(w.resolved, w.newTickets))
+    1,
+    ...weeks.map((w) => Math.max(w.resolved, w.newTickets))
   );
 
   return (
@@ -33,7 +34,9 @@ export function ReportsVolumeTrends() {
 
       <div className="relative mb-8">
         <div className="flex h-[300px] w-full items-end justify-between gap-2 px-2">
-          {REPORTS_VOLUME_WEEKS.map((week, index) => (
+          {weeks.length === 0 ? (
+            <p className="self-center text-body-md text-secondary">No ticket volume data available.</p>
+          ) : weeks.map((week, index) => (
             <div
               key={week.week}
               className="group relative flex h-full flex-1 cursor-pointer items-end justify-center"
@@ -60,7 +63,7 @@ export function ReportsVolumeTrends() {
         </div>
         {/* X-axis labels */}
         <div className="mt-3 flex justify-between px-4 text-[11px] font-label-md text-secondary">
-          {REPORTS_VOLUME_WEEKS.map((w) => (
+          {weeks.map((w) => (
             <span key={w.week}>{w.week}</span>
           ))}
         </div>

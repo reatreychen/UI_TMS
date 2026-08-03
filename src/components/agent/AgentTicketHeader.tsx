@@ -1,11 +1,15 @@
-import { Share2, UserCheck, CheckCircle2 } from "lucide-react";
-import type { AgentTicketDetail } from "@/src/data/agentTicketDetail";
+import { Share2, UserCheck, CheckCircle2, Loader2 } from "lucide-react";
+import type { AgentTicketDetail } from "@/src/constants/agentTicketDetail";
 
 interface AgentTicketHeaderProps {
   ticket: AgentTicketDetail;
+  onAssign?: () => void;
+  onResolve?: () => void;
+  isAssigning?: boolean;
+  isResolving?: boolean;
 }
 
-export function AgentTicketHeader({ ticket }: AgentTicketHeaderProps) {
+export function AgentTicketHeader({ ticket, onAssign, onResolve, isAssigning, isResolving }: AgentTicketHeaderProps) {
   return (
     <div className="flex items-start justify-between border-b border-outline-variant bg-surface-container-lowest px-container-margin py-6">
       <div className="space-y-2">
@@ -53,11 +57,21 @@ export function AgentTicketHeader({ ticket }: AgentTicketHeaderProps) {
         <button className="flex items-center gap-2 rounded-lg border border-outline-variant px-4 py-2 text-body-md font-semibold transition-colors hover:bg-surface-container-low">
           <Share2 aria-hidden className="size-4" /> Share
         </button>
-        <button className="flex items-center gap-2 rounded-lg border border-outline-variant px-4 py-2 text-body-md font-semibold transition-colors hover:bg-surface-container-low">
-          <UserCheck aria-hidden className="size-4" /> Assign
+        <button
+          onClick={onAssign}
+          disabled={isAssigning || isResolving}
+          className="flex items-center gap-2 rounded-lg border border-outline-variant px-4 py-2 text-body-md font-semibold transition-colors hover:bg-surface-container-low disabled:opacity-50"
+        >
+          {isAssigning ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <UserCheck aria-hidden className="size-4" />}
+          Assign
         </button>
-        <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-body-md font-semibold text-white transition-colors hover:bg-primary-container">
-          <CheckCircle2 aria-hidden className="size-4" /> Resolve
+        <button
+          onClick={onResolve}
+          disabled={isResolving || isAssigning}
+          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-body-md font-semibold text-white transition-colors hover:bg-primary-container disabled:opacity-50"
+        >
+          {isResolving ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <CheckCircle2 aria-hidden className="size-4" />}
+          Resolve
         </button>
       </div>
     </div>

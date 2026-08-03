@@ -11,8 +11,6 @@ export const metadata = {
 export default function MyTicketsPage() {
   return (
     <>
-      <AgentTicketsTopNav />
-
       <div className="mx-auto w-full max-w-[1440px] space-y-stack-lg p-container-margin">
         <TicketsFilter />
         <TicketsTable />

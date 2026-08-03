@@ -5,10 +5,55 @@ import Link from "next/link";
 import { TopNav } from "@/src/components/portal/TopNav";
 import { PortalFooter } from "@/src/components/portal/PortalFooter";
 import { CreateTicketTrigger } from "@/src/components/portal/CreateTicketModal";
+import {
+  fetchAllKnowledgeBaseArticles,
+  fetchPublicCategories,
+  KnowledgeBaseArticleRecord,
+} from "@/src/services/portalService";
 
 export default function KnowledgeBasePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const [articles, setArticles] = useState<KnowledgeBaseArticleRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [categories, setCategories] = useState<string[]>([
+    "All",
+    "Troubleshooting",
+    "Policy",
+    "Systems",
+    "Billing",
+  ]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [selectedArticle, setSelectedArticle] = useState<KnowledgeBaseArticleRecord | null>(null);
+  const [helpfulFeedback, setHelpfulFeedback] = useState<Record<string, "yes" | "no">>({});
+
+  useEffect(() => {
+    fetchPublicCategories()
+      .then((cats) => {
+        const names = Array.from(
+          new Set([
+            "All",
+            ...cats.map((c) => c.name).filter(Boolean),
+            "Troubleshooting",
+            "Policy",
+            "Systems",
+            "Billing",
+          ])
+        );
+        setCategories(names);
+      })
+      .catch((err) => console.error("Failed to load categories:", err));
+  }, []);
+
+
+  useEffect(() => {
+    setIsLoading(true);
+    fetchAllKnowledgeBaseArticles(false, searchQuery)
+      .then((data) => setArticles(data))
+      .catch((err) => console.error("Failed to load KB articles:", err))
+      .finally(() => setIsLoading(false));
+  }, [searchQuery]);
 
   // Keyboard shortcut: Press '/' to focus search input
   useEffect(() => {
@@ -52,6 +97,11 @@ export default function KnowledgeBasePage() {
       category: "feature",
     },
   ];
+
+  const filteredArticles = articles.filter((art) => {
+    if (selectedCategory === "All") return true;
+    return (art.category || "Troubleshooting").toLowerCase() === selectedCategory.toLowerCase();
+  });
 
   return (
     <div className="min-h-screen bg-background font-body-md text-on-surface antialiased">
@@ -155,6 +205,109 @@ export default function KnowledgeBasePage() {
               </span>
             </Link>
           </div>
+        </section>
+
+        {/* ── KNOWLEDGE BASE ARTICLES SECTION ── */}
+        <section className="py-20 max-w-[1440px] mx-auto px-container-margin">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-primary font-bold text-label-md uppercase tracking-wider mb-2">
+                <span className="material-symbols-outlined text-[18px]">menu_book</span>
+                <span>Documentation & Guides</span>
+              </div>
+              <h2 className="font-headline-lg text-headline-lg text-on-surface mb-2">
+                {searchQuery ? `Search Results for "${searchQuery}"` : "Published Support Articles"}
+              </h2>
+              <p className="text-on-surface-variant font-body-md">
+                Browse official documentation written and maintained by Kinetic support engineers.
+              </p>
+            </div>
+
+            {/* Category Pills */}
+            <div className="flex flex-wrap gap-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-4 py-2 rounded-full text-label-md font-semibold transition-all cursor-pointer ${
+                    selectedCategory === cat
+                      ? "bg-primary text-white shadow-sm"
+                      : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high border border-outline-variant"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="py-16 text-center bg-surface-container-lowest border border-outline-variant rounded-2xl">
+              <div className="flex items-center justify-center gap-2 text-on-surface-variant">
+                <span className="material-symbols-outlined animate-spin text-[24px]">refresh</span>
+                <span className="font-medium text-body-lg">Loading articles...</span>
+              </div>
+            </div>
+          ) : filteredArticles.length === 0 ? (
+            <div className="py-16 text-center bg-surface-container-lowest border border-outline-variant rounded-2xl px-6">
+              <span className="material-symbols-outlined text-[48px] text-outline mb-3">search_off</span>
+              <h3 className="font-headline-md text-on-surface mb-1">No articles found</h3>
+              <p className="text-on-surface-variant text-body-md max-w-md mx-auto">
+                We couldn&apos;t find any published articles matching your criteria. Try adjusting your search query or category filter.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredArticles.map((art) => {
+                const authorName = art.createdBy?.fullName || art.createdBy?.name || "Support Engineer";
+                const dateStr = art.createdAt
+                  ? new Date(art.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                  : "Recently";
+
+                const badgeStyle =
+                  art.category === "Troubleshooting"
+                    ? "bg-blue-100 text-blue-800 border-blue-200"
+                    : art.category === "Policy"
+                    ? "bg-purple-100 text-purple-800 border-purple-200"
+                    : art.category === "Systems"
+                    ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                    : "bg-slate-100 text-slate-800 border-slate-200";
+
+                return (
+                  <div
+                    key={art.id}
+                    onClick={() => setSelectedArticle(art)}
+                    className="bg-white border border-outline-variant rounded-xl p-6 shadow-xs hover:shadow-md hover:border-primary/50 transition-all cursor-pointer flex flex-col justify-between group"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeStyle}`}>
+                          {art.category || "Troubleshooting"}
+                        </span>
+                        <span className="font-code text-xs text-outline font-semibold">
+                          #{art.slug ? art.slug.slice(art.slug.lastIndexOf("-") + 1).toUpperCase() : art.id.slice(0, 8)}
+                        </span>
+                      </div>
+                      <h3 className="font-headline-md text-[18px] text-on-surface font-bold group-hover:text-primary transition-colors mb-2 line-clamp-2">
+                        {art.title}
+                      </h3>
+                      <p className="text-on-surface-variant text-body-md line-clamp-3 mb-4 leading-relaxed">
+                        {art.content}
+                      </p>
+                    </div>
+                    <div className="pt-4 border-t border-outline-variant flex items-center justify-between text-xs text-on-surface-variant">
+                      <span>By {authorName}</span>
+                      <span className="font-medium text-outline">{dateStr}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* ── HELP CATEGORIES BENTO GRID ── */}
@@ -282,6 +435,104 @@ export default function KnowledgeBasePage() {
             </div>
           </div>
         </section>
+
+        {/* ── ARTICLE READER MODAL ── */}
+        {selectedArticle && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+            onClick={() => setSelectedArticle(null)}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-y-auto shadow-2xl border border-outline-variant p-6 md:p-8 relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-4 pb-4 border-b border-outline-variant mb-6">
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-primary-container/20 text-primary">
+                    {selectedArticle.category || "Troubleshooting"}
+                  </span>
+                  <span className="font-code text-xs text-outline">
+                    Ref: #{selectedArticle.slug ? selectedArticle.slug.slice(selectedArticle.slug.lastIndexOf("-") + 1).toUpperCase() : selectedArticle.id.slice(0, 8)}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedArticle(null)}
+                  className="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
+              </div>
+
+              <h2 className="font-display text-2xl md:text-3xl font-bold text-on-surface mb-3">
+                {selectedArticle.title}
+              </h2>
+
+              <div className="flex items-center gap-4 text-xs text-on-surface-variant mb-6 pb-4 border-b border-outline-variant">
+                <span>
+                  Author: <strong>{selectedArticle.createdBy?.fullName || selectedArticle.createdBy?.name || "Support Engineer"}</strong>
+                </span>
+                <span>•</span>
+                <span>
+                  Updated:{" "}
+                  <strong>
+                    {selectedArticle.createdAt
+                      ? new Date(selectedArticle.createdAt).toLocaleDateString("en-US", {
+                          month: "long",
+                          day: "numeric",
+                          year: "numeric",
+                        })
+                      : "Recently"}
+                  </strong>
+                </span>
+              </div>
+
+              <div className="prose prose-slate max-w-none font-body-lg text-on-surface leading-relaxed whitespace-pre-wrap mb-8">
+                {selectedArticle.content}
+              </div>
+
+              {/* Helpful Feedback Bar */}
+              <div className="mt-8 pt-6 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface-container-lowest p-4 rounded-xl">
+                <p className="text-body-md font-semibold text-on-surface">
+                  Was this article helpful?
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      setHelpfulFeedback((prev) => ({
+                        ...prev,
+                        [selectedArticle.id]: "yes",
+                      }))
+                    }
+                    className={`px-4 py-1.5 rounded-lg border text-label-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      helpfulFeedback[selectedArticle.id] === "yes"
+                        ? "bg-green-600 text-white border-green-600"
+                        : "border-outline-variant text-on-surface hover:bg-green-50 hover:text-green-700 hover:border-green-300"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">thumb_up</span>
+                    <span>Yes</span>
+                  </button>
+                  <button
+                    onClick={() =>
+                      setHelpfulFeedback((prev) => ({
+                        ...prev,
+                        [selectedArticle.id]: "no",
+                      }))
+                    }
+                    className={`px-4 py-1.5 rounded-lg border text-label-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      helpfulFeedback[selectedArticle.id] === "no"
+                        ? "bg-red-600 text-white border-red-600"
+                        : "border-outline-variant text-on-surface hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">thumb_down</span>
+                    <span>No</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       <PortalFooter />

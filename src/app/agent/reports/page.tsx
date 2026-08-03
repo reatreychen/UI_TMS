@@ -1,10 +1,4 @@
-import { ReportsTopNav } from "@/src/components/agent/ReportsTopNav";
-import { ReportsHeader } from "@/src/components/agent/ReportsHeader";
-import { ReportsKPIs } from "@/src/components/agent/ReportsKPIs";
-import { ReportsVolumeTrends } from "@/src/components/agent/ReportsVolumeTrends";
-import { ReportsCategoryStats } from "@/src/components/agent/ReportsCategoryStats";
-import { ReportsPerformanceStats } from "@/src/components/agent/ReportsPerformanceStats";
-import { ReportsContributorsTable } from "@/src/components/agent/ReportsContributorsTable";
+import { ReportsView } from "@/src/components/agent/ReportsView";
 
 export const metadata = {
   title: "Reports & Analytics | TMS Enterprise",
@@ -14,22 +8,10 @@ export const metadata = {
 export default function AgentReportsPage() {
   return (
     <>
-      <ReportsTopNav />
-
       {/* Page Canvas */}
       <main className="flex-1 overflow-y-auto pb-stack-lg">
         <div className="mx-auto max-w-[1440px] px-container-margin pt-8">
-          <ReportsHeader />
-          <ReportsKPIs />
-          <ReportsVolumeTrends />
-
-          {/* Smaller Charts Grid */}
-          <div className="mb-stack-lg grid grid-cols-1 gap-gutter lg:grid-cols-2">
-            <ReportsCategoryStats />
-            <ReportsPerformanceStats />
-          </div>
-
-          <ReportsContributorsTable />
+          <ReportsView />
         </div>
 
         {/* Footer */}

@@ -10,7 +10,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import { ARTICLE_DETAIL } from "@/src/data/articleDetail";
+import { ARTICLE_DETAIL } from "@/src/constants/articleDetail";
 
 export function ArticleContent() {
   const [copied, setCopied] = useState(false);

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { Camera } from "lucide-react";
-import { AGENT_PROFILE, JOB_ROLES } from "@/src/data/agentSettings";
+import { AGENT_PROFILE, JOB_ROLES } from "@/src/constants/agentSettings";
 
 export function SettingsProfileForm() {
   const [isSaving, setIsSaving] = useState(false);

@@ -8,13 +8,10 @@ import {
   Ticket,
   LayoutDashboard,
   List,
-  Users,
   BarChart,
   Settings,
-  Plus,
   HelpCircle,
   LogOut,
-  BookOpen,
 } from "lucide-react";
 
 export function AgentSidebar() {
@@ -95,41 +92,6 @@ export function AgentSidebar() {
             fill={pathname === "/agent/queue" ? "currentColor" : "none"}
           />
           Queue
-        </Link>
-        <Link
-          href="/agent/customers"
-          className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-all ${
-            pathname === "/agent/customers"
-              ? "bg-secondary-container font-bold text-on-secondary-container"
-              : "text-on-surface-variant hover:bg-surface-container-high"
-          }`}
-        >
-          {pathname === "/agent/customers" && (
-            <div className="absolute left-0 h-8 w-1 rounded-r bg-primary" />
-          )}
-          <Users
-            aria-hidden
-            className={`size-5 ${pathname === "/agent/customers" ? "text-primary" : ""}`}
-            fill={pathname === "/agent/customers" ? "currentColor" : "none"}
-          />
-          Customers
-        </Link>
-        <Link
-          href="/agent/knowledge-base"
-          className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-all ${
-            pathname === "/agent/knowledge-base"
-              ? "bg-secondary-container font-bold text-on-secondary-container"
-              : "text-on-surface-variant hover:bg-surface-container-high"
-          }`}
-        >
-          {pathname === "/agent/knowledge-base" && (
-            <div className="absolute left-0 h-8 w-1 rounded-r bg-primary" />
-          )}
-          <BookOpen
-            aria-hidden
-            className={`size-5 ${pathname === "/agent/knowledge-base" ? "text-primary" : ""}`}
-          />
-          Knowledge Base
         </Link>
         <Link
           href="/agent/reports"

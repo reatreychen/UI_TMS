@@ -1,15 +1,15 @@
-import { REPORTS_PERFORMANCE } from "@/src/data/agentReports";
+import type { ReportPerformanceBar } from "@/src/constants/agentReports";
 
 const MAX_BAR_HEIGHT = 160; // px
 
-export function ReportsPerformanceStats() {
+export function ReportsPerformanceStats({ performance }: { performance: ReportPerformanceBar[] }) {
   return (
     <div className="rounded-xl border border-outline-variant bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
       <h3 className="mb-6 text-headline-md font-headline-md">
         Performance vs Team Average
       </h3>
       <div className="flex h-[180px] items-end justify-around gap-8">
-        {REPORTS_PERFORMANCE.map((item) => (
+        {performance.map((item) => (
           <div
             key={item.metric}
             className="flex w-full flex-col items-center gap-4"

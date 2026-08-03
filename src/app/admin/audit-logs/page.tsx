@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { fetchAuditLogs } from "@/src/services/auditLogService";
+import { adminUserService } from "@/src/services/adminUserService";
 
 interface AuditLogRow {
   id: string;
@@ -9,7 +11,7 @@ interface AuditLogRow {
   avatar?: string;
   entity: string;
   entityId: string;
-  action: "UPDATE" | "LOGIN" | "EXPORT" | "DELETE" | "AUTOMATION" | "CREATE";
+  action: string;
   ipAddress: string;
   browserSignature: string;
   fullUserAgent?: string;
@@ -25,6 +27,10 @@ export default function AuditLogsPage() {
   const [selectedLog, setSelectedLog] = useState<AuditLogRow | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [rowsPerPage] = useState(10);
 
   const initialLogs: AuditLogRow[] = [
     {
@@ -99,6 +105,7 @@ export default function AuditLogsPage() {
   useEffect(() => {
     const handleSearch = (e: Event) => {
       const customEvt = e as CustomEvent<string>;
+      setCurrentPage(1);
       setSearchQuery(customEvt.detail || "");
     };
 
@@ -112,20 +119,89 @@ export default function AuditLogsPage() {
     setTimeout(() => setShowToast(false), 3500);
   };
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAuditLogs() {
+      setIsLoading(true);
+      setErrorMessage("");
+
+      try {
+        const [records, users] = await Promise.all([
+          fetchAuditLogs(
+            actionFilter === "All Action Types"
+              ? undefined
+              : { action: actionFilter.toUpperCase() },
+          ),
+          adminUserService.getUsers().catch(() => []),
+        ]);
+        if (cancelled) return;
+
+        const usersById = new Map(users.map((user) => [user.id, user]));
+        setLogs(
+          records.map((record) => {
+            const user = record.userId ? usersById.get(record.userId) : undefined;
+            return {
+              id: record.id,
+              timestamp: record.createdAt,
+              user: user?.fullName || record.userId || "System",
+              avatar: user?.profileImage || undefined,
+              entity: record.entity,
+              entityId: record.entityId,
+              action: record.action,
+              ipAddress: record.ipAddress || "—",
+              browserSignature: record.browserSignature || "—",
+              fullUserAgent: record.browserSignature || undefined,
+            };
+          }),
+        );
+      } catch (error) {
+        if (!cancelled) {
+          setLogs([]);
+          setErrorMessage(error instanceof Error ? error.message : "Could not load audit logs.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
+      }
+    }
+
+    void loadAuditLogs();
+    return () => {
+      cancelled = true;
+    };
+  }, [actionFilter, refreshKey]);
+
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-      triggerToast("System audit trail refreshed with live telemetry.");
-    }, 600);
+    setRefreshKey((key) => key + 1);
+    triggerToast("Refreshing audit logs...");
   };
 
   const handleExportCSV = () => {
     setIsExportingCSV(true);
-    setTimeout(() => {
-      setIsExportingCSV(false);
+    try {
+      const headers = ["timestamp", "user", "entity", "entityId", "action", "ipAddress", "browserSignature"];
+      const csv = [
+        headers.join(","),
+        ...logs.map((log) =>
+          headers
+            .map((header) => `"${String(log[header as keyof AuditLogRow] ?? "").replace(/"/g, '""')}"`)
+            .join(","),
+        ),
+      ].join("\n");
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "audit-logs.csv";
+      link.click();
+      URL.revokeObjectURL(url);
       triggerToast("Compliance audit log exported to CSV.");
-    }, 800);
+    } finally {
+      setIsExportingCSV(false);
+    }
   };
 
   const filteredLogs = logs.filter((log) => {
@@ -142,6 +218,10 @@ export default function AuditLogsPage() {
 
     return matchesSearch && matchesAction;
   });
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / rowsPerPage));
+  const visibleLogs = filteredLogs.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+  const activeUserCount = new Set(logs.map((log) => log.user)).size;
+  const securityAlertCount = logs.filter((log) => ["DELETE", "UPDATE"].includes(log.action.toUpperCase())).length;
 
   return (
     <div className="space-y-stack-lg max-w-[1440px] mx-auto w-full animate-in fade-in duration-300">
@@ -195,7 +275,7 @@ export default function AuditLogsPage() {
               event_note
             </span>
           </div>
-          <div className="text-headline-lg font-display text-on-surface font-bold">1.2M</div>
+          <div className="text-headline-lg font-display text-on-surface font-bold">{logs.length}</div>
           <div className="text-xs text-green-600 font-bold mt-1">↑ 12% from last week</div>
         </div>
 
@@ -208,7 +288,7 @@ export default function AuditLogsPage() {
               group
             </span>
           </div>
-          <div className="text-headline-lg font-display text-on-surface font-bold">432</div>
+          <div className="text-headline-lg font-display text-on-surface font-bold">{activeUserCount}</div>
           <div className="text-xs text-secondary mt-1">Global enterprise access</div>
         </div>
 
@@ -221,7 +301,7 @@ export default function AuditLogsPage() {
               warning
             </span>
           </div>
-          <div className="text-headline-lg font-display text-on-surface font-bold">14</div>
+          <div className="text-headline-lg font-display text-on-surface font-bold">{securityAlertCount}</div>
           <div className="text-xs text-error font-bold mt-1">Action required (3)</div>
         </div>
 
@@ -234,7 +314,7 @@ export default function AuditLogsPage() {
               speed
             </span>
           </div>
-          <div className="text-headline-lg font-display text-on-surface font-bold">99.98%</div>
+          <div className="text-headline-lg font-display text-on-surface font-bold">—</div>
           <div className="text-xs text-secondary mt-1">Server region: US-East-1</div>
         </div>
       </div>
@@ -248,7 +328,10 @@ export default function AuditLogsPage() {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setCurrentPage(1);
+              setSearchQuery(e.target.value);
+            }}
             placeholder="Search by user, entity, or ID..."
             className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:outline-none transition-all text-body-md"
           />
@@ -257,7 +340,10 @@ export default function AuditLogsPage() {
         <div className="flex flex-wrap items-center gap-stack-md">
           <select
             value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
+            onChange={(e) => {
+              setCurrentPage(1);
+              setActionFilter(e.target.value);
+            }}
             className="bg-white border border-outline-variant rounded-lg px-4 py-2 font-label-md text-secondary focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer"
           >
             <option value="All Action Types">All Action Types</option>
@@ -324,14 +410,26 @@ export default function AuditLogsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant text-body-md">
-              {filteredLogs.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-8 text-center text-outline">
+                    Loading audit logs...
+                  </td>
+                </tr>
+              ) : errorMessage ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-8 text-center text-error">
+                    {errorMessage}
+                  </td>
+                </tr>
+              ) : filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-8 text-center text-outline">
                     No system logs matching current query parameters.
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((log) => (
+                visibleLogs.map((log) => (
                   <tr
                     key={log.id}
                     onClick={() => setSelectedLog(log)}
@@ -399,54 +497,25 @@ export default function AuditLogsPage() {
           </table>
         </div>
 
-        {/* Pagination Footer */}
-        <div className="px-6 py-4 bg-surface-container-low flex flex-col md:flex-row items-center justify-between gap-stack-md border-t border-outline-variant">
-          <span className="font-label-md text-secondary font-medium">
-            Showing 1 to {filteredLogs.length} of 12,450 entries
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
+          {/* Pagination Footer */}
+          <div className="px-6 py-4 bg-surface-container-low flex flex-col md:flex-row items-center justify-between gap-stack-md border-t border-outline-variant">
+            <span className="font-label-md text-secondary font-medium">
+            Showing {filteredLogs.length === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1} to {Math.min(currentPage * rowsPerPage, filteredLogs.length)} of {filteredLogs.length} entries
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage === 1 || isLoading}
               className="p-2 border border-outline-variant rounded-lg text-secondary disabled:opacity-50 transition-all cursor-pointer disabled:cursor-not-allowed"
             >
               <span className="material-symbols-outlined text-[20px]">chevron_left</span>
-            </button>
-            <button
-              onClick={() => setCurrentPage(1)}
-              className={`px-3 py-1 font-bold rounded-lg cursor-pointer ${
-                currentPage === 1 ? "bg-primary text-white" : "hover:bg-surface-container-highest text-secondary"
-              }`}
-            >
-              1
-            </button>
-            <button
-              onClick={() => setCurrentPage(2)}
-              className={`px-3 py-1 font-bold rounded-lg cursor-pointer ${
-                currentPage === 2 ? "bg-primary text-white" : "hover:bg-surface-container-highest text-secondary"
-              }`}
-            >
-              2
-            </button>
-            <button
-              onClick={() => setCurrentPage(3)}
-              className={`px-3 py-1 font-bold rounded-lg cursor-pointer ${
-                currentPage === 3 ? "bg-primary text-white" : "hover:bg-surface-container-highest text-secondary"
-              }`}
-            >
-              3
-            </button>
-            <span className="text-secondary px-2">...</span>
-            <button
-              onClick={() => setCurrentPage(249)}
-              className={`px-3 py-1 font-bold rounded-lg cursor-pointer ${
-                currentPage === 249 ? "bg-primary text-white" : "hover:bg-surface-container-highest text-secondary"
-              }`}
-            >
-              249
-            </button>
-            <button
-              onClick={() => setCurrentPage(currentPage + 1)}
+              </button>
+              <span className="px-2 text-label-md text-secondary">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPage >= totalPages || isLoading}
               className="p-2 border border-outline-variant rounded-lg text-secondary hover:bg-surface-container-highest transition-all cursor-pointer"
             >
               <span className="material-symbols-outlined text-[20px]">chevron_right</span>
@@ -507,7 +576,7 @@ export default function AuditLogsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-outline font-bold">HASH SIG:</span>
-                  <span className="text-secondary">{selectedLog.payloadHash || "0x981f20104a"}</span>
+                  <span className="text-secondary">{selectedLog.payloadHash || "Not provided by API"}</span>
                 </div>
               </div>
 

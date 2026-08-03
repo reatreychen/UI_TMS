@@ -1,12 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import {
+  fetchAllKnowledgeBaseArticles,
+  createKnowledgeBaseArticle,
+  publishKnowledgeBaseArticle,
+  deleteKnowledgeBaseArticle,
+  fetchPublicCategories,
+  KnowledgeBaseArticleRecord,
+} from "@/src/services/portalService";
 
 interface KBArticle {
   id: string;
   ref: string;
   title: string;
-  category: "Troubleshooting" | "Policy" | "Systems" | "Billing";
+  category: string;
   author: string;
   authorInitials: string;
   lastUpdated: string;
@@ -14,6 +22,46 @@ interface KBArticle {
   views: string;
   status: "Published" | "Draft" | "Archived";
   content?: string;
+}
+
+function mapArticleToKB(rec: KnowledgeBaseArticleRecord, idx: number): KBArticle {
+  const authorName = rec.createdBy?.fullName || rec.createdBy?.name || "Admin User";
+  const initials = authorName
+    .split(" ")
+    .map((w) => w[0]?.toUpperCase() || "")
+    .join("")
+    .slice(0, 2) || "AU";
+
+  const date = rec.createdAt ? new Date(rec.createdAt) : new Date();
+  const now = new Date();
+  const diffMonths = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24 * 30);
+  const isOutdated = diffMonths > 6;
+
+  let lastUpdated = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  if (isOutdated) {
+    lastUpdated = "Outdated (6m+)";
+  }
+
+  const category = (rec.category as KBArticle["category"]) || "Troubleshooting";
+  const status = rec.published ? "Published" : "Draft";
+
+  return {
+    id: rec.id,
+    ref: rec.slug ? `KB-${rec.slug.slice(rec.slug.lastIndexOf("-") + 1).toUpperCase()}` : `KB-${1000 + idx}`,
+    title: rec.title,
+    category,
+    author: authorName,
+    authorInitials: initials,
+    lastUpdated,
+    isOutdated,
+    views: `${Math.floor(1 + (idx * 3.7)) % 15}.${(idx * 7) % 9}k`,
+    status,
+    content: rec.content,
+  };
 }
 
 export default function AdminKnowledgeBasePage() {
@@ -24,65 +72,52 @@ export default function AdminKnowledgeBasePage() {
   const [previewArticle, setPreviewArticle] = useState<KBArticle | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Create Article Form
   const [newTitle, setNewTitle] = useState("");
-  const [newCategory, setNewCategory] = useState<"Troubleshooting" | "Policy" | "Systems">("Troubleshooting");
+  const [newCategory, setNewCategory] = useState<string>("Troubleshooting");
   const [newContent, setNewContent] = useState("");
 
-  const initialArticles: KBArticle[] = [
-    {
-      id: "KB-1",
-      ref: "KB-20459",
-      title: "Troubleshooting Wi-Fi 6E Connectivity",
-      category: "Troubleshooting",
-      author: "Alex Rivera",
-      authorInitials: "AR",
-      lastUpdated: "Oct 12, 2026",
-      views: "4.2k",
-      status: "Published",
-      content: "This guide covers diagnostic procedures for 6GHz frequency band handshakes, WPA3 enterprise authentication protocols, and router firmware updates.",
-    },
-    {
-      id: "KB-2",
-      ref: "KB-8821",
-      title: "Updated Remote Work Stipend Policy",
-      category: "Policy",
-      author: "Sarah Miller",
-      authorInitials: "SM",
-      lastUpdated: "Outdated (6m+)",
-      isOutdated: true,
-      views: "852",
-      status: "Published",
-      content: "Details regarding hardware allocation allowances, ergonomic home office reimbursements, and monthly internet subvention limits.",
-    },
-    {
-      id: "KB-3",
-      ref: "KB-9004",
-      title: "Integrating New CRM Webhooks",
-      category: "Systems",
-      author: "James Dooley",
-      authorInitials: "JD",
-      lastUpdated: "Just now",
-      views: "--",
-      status: "Draft",
-      content: "Step-by-step developer guide to setting up webhook endpoints, HMAC SHA-256 signature verification, and event payload listeners.",
-    },
-    {
-      id: "KB-4",
-      ref: "KB-1022",
-      title: "Legacy VPN Setup (v2.4)",
-      category: "Systems",
-      author: "KB Admin",
-      authorInitials: "KB",
-      lastUpdated: "Jan 20, 2024",
-      views: "12.1k",
-      status: "Archived",
-      content: "Instructions for deprecated OpenVPN clients. Recommended to migrate to WireGuard enterprise gateway.",
-    },
-  ];
+  const [articles, setArticles] = useState<KBArticle[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([
+    "Troubleshooting",
+    "Policy",
+    "Systems",
+    "Billing",
+  ]);
 
-  const [articles, setArticles] = useState<KBArticle[]>(initialArticles);
+  useEffect(() => {
+    fetchPublicCategories()
+      .then((cats) => {
+        const names = Array.from(
+          new Set([
+            ...cats.map((c) => c.name).filter(Boolean),
+            "Troubleshooting",
+            "Policy",
+            "Systems",
+            "Billing",
+          ])
+        );
+        setAvailableCategories(names);
+        if (names.length > 0) setNewCategory(names[0]);
+      })
+      .catch((err) => console.error("Failed to fetch categories:", err));
+  }, []);
+
+
+  useEffect(() => {
+    setIsLoading(true);
+    fetchAllKnowledgeBaseArticles(true)
+      .then((data) => {
+        setArticles(data.map((rec, idx) => mapArticleToKB(rec, idx)));
+      })
+      .catch((err) => {
+        console.error("Failed to load KB articles:", err);
+      })
+      .finally(() => setIsLoading(false));
+  }, [refreshTrigger]);
 
   // Global search bar listener
   useEffect(() => {
@@ -101,47 +136,72 @@ export default function AdminKnowledgeBasePage() {
     setTimeout(() => setShowToast(false), 3500);
   };
 
-  const handleArchive = (id: string) => {
-    setArticles(
-      articles.map((art) => (art.id === id ? { ...art, status: "Archived" } : art))
-    );
-    triggerToast("Article archived successfully.");
+  const handleArchive = async (id: string) => {
+    try {
+      await publishKnowledgeBaseArticle(id, false);
+      setArticles((prev) =>
+        prev.map((art) => (art.id === id ? { ...art, status: "Archived" } : art))
+      );
+      triggerToast("Article archived successfully.");
+    } catch (err) {
+      console.error(err);
+      triggerToast("Failed to archive article.");
+    }
   };
 
-  const handleRestore = (id: string) => {
-    setArticles(
-      articles.map((art) => (art.id === id ? { ...art, status: "Published" } : art))
-    );
-    triggerToast("Article restored to published status.");
+  const handleRestore = async (id: string) => {
+    try {
+      await publishKnowledgeBaseArticle(id, true);
+      setArticles((prev) =>
+        prev.map((art) => (art.id === id ? { ...art, status: "Published" } : art))
+      );
+      triggerToast("Article restored to published status.");
+    } catch (err) {
+      console.error(err);
+      triggerToast("Failed to restore article.");
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setArticles(articles.filter((art) => art.id !== id));
-    triggerToast("Article permanently deleted.");
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteKnowledgeBaseArticle(id);
+      setArticles((prev) => prev.filter((art) => art.id !== id));
+      triggerToast("Article permanently deleted.");
+    } catch (err) {
+      console.error(err);
+      triggerToast("Failed to delete article.");
+    }
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const created: KBArticle = {
-      id: `KB-${articles.length + 1}`,
-      ref: `KB-${Math.floor(10000 + Math.random() * 90000)}`,
-      title: newTitle.trim(),
-      category: newCategory,
-      author: "Alex Rivera",
-      authorInitials: "AR",
-      lastUpdated: "Just now",
-      views: "0",
-      status: "Published",
-      content: newContent.trim() || "Knowledge base documentation article.",
-    };
+    try {
+      const slugBase = newTitle
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || `kb-${Date.now()}`;
+      const slug = `${slugBase}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    setArticles([created, ...articles]);
-    setNewTitle("");
-    setNewContent("");
-    setShowCreateModal(false);
-    triggerToast(`Created article '${created.title}'!`);
+      await createKnowledgeBaseArticle({
+        title: newTitle.trim(),
+        slug,
+        category: newCategory,
+        content: newContent.trim() || "Knowledge base documentation article.",
+        published: true,
+      });
+
+      setNewTitle("");
+      setNewContent("");
+      setShowCreateModal(false);
+      triggerToast("Created article successfully!");
+      setRefreshTrigger((c) => c + 1);
+    } catch (err) {
+      console.error(err);
+      triggerToast("Failed to create article.");
+    }
   };
 
   const filteredArticles = articles.filter((art) => {
@@ -292,9 +352,11 @@ export default function AdminKnowledgeBasePage() {
               className="px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded-lg text-body-md font-medium hover:bg-surface-container-high transition-colors cursor-pointer outline-none"
             >
               <option value="All Categories">All Categories</option>
-              <option value="Troubleshooting">Troubleshooting</option>
-              <option value="Policy">Policy</option>
-              <option value="Systems">Systems</option>
+              {availableCategories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
             </select>
           </div>
           <div className="text-outline text-body-md font-medium">
@@ -331,7 +393,16 @@ export default function AdminKnowledgeBasePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant">
-              {filteredArticles.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-outline">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="material-symbols-outlined animate-spin">refresh</span>
+                      <span>Loading knowledge base articles...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredArticles.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-outline">
                     No articles found matching current filters.
@@ -510,12 +581,14 @@ export default function AdminKnowledgeBasePage() {
                 </label>
                 <select
                   value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value as any)}
+                  onChange={(e) => setNewCategory(e.target.value)}
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-body-md focus:ring-2 focus:ring-primary outline-none cursor-pointer"
                 >
-                  <option value="Troubleshooting">Troubleshooting</option>
-                  <option value="Policy">Policy</option>
-                  <option value="Systems">Systems</option>
+                  {availableCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
                 </select>
               </div>
 

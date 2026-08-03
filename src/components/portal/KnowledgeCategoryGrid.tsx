@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { categories } from "@/src/data/knowledgeBase";
+import { categories } from "@/src/constants/knowledgeBase";
 
 export function KnowledgeCategoryGrid() {
   return (

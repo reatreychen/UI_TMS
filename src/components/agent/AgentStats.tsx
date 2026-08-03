@@ -1,5 +1,5 @@
 import { Timer, CheckCircle, Zap } from "lucide-react";
-import { AGENT_STATS } from "@/src/data/agentMyTickets";
+import { AGENT_STATS } from "@/src/constants/agentMyTickets";
 
 export function AgentStats() {
   return (

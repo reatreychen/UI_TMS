@@ -1,5 +1,5 @@
 import Image from "next/image";
-import type { AgentTicketDetail } from "@/src/data/agentTicketDetail";
+import type { AgentTicketDetail } from "@/src/constants/agentTicketDetail";
 
 interface AgentTicketSidebarProps {
   ticket: AgentTicketDetail;

@@ -4,7 +4,7 @@ import { TopNav } from "@/src/components/portal/TopNav";
 import { PortalFooter } from "@/src/components/portal/PortalFooter";
 import { ArticleContent } from "@/src/components/portal/ArticleContent";
 import { ArticleSidebar } from "@/src/components/portal/ArticleSidebar";
-import { ARTICLE_DETAIL } from "@/src/data/articleDetail";
+import { ARTICLE_DETAIL } from "@/src/constants/articleDetail";
 
 export const metadata = {
   title: `${ARTICLE_DETAIL.title} | Kinetic TMS Knowledge Base`,

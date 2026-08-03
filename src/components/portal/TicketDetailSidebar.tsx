@@ -4,7 +4,7 @@ import {
   TICKET_DETAIL,
   ATTACHMENTS,
   ACTIVITY_LOG,
-} from "@/src/data/ticketDetail";
+} from "@/src/constants/ticketDetail";
 
 /* ── Ticket Details Card ────────────────────────────────────────── */
 

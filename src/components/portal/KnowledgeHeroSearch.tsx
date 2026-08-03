@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { popularSearches } from "@/src/data/knowledgeBase";
+import { popularSearches } from "@/src/constants/knowledgeBase";
 
 export function KnowledgeHeroSearch() {
   const [query, setQuery] = useState("");

@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Archive,
   CheckCircle2,
@@ -6,7 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { ticketMetrics } from "@/src/data/tickets";
+import { ticketMetrics } from "@/src/constants/tickets";
 
 const iconMap: Record<(typeof ticketMetrics)[number]["icon"], LucideIcon> = {
   mail: Mail,
@@ -15,10 +17,39 @@ const iconMap: Record<(typeof ticketMetrics)[number]["icon"], LucideIcon> = {
   archive: Archive,
 };
 
+import { useState, useEffect } from "react";
+import { useAppSelector } from "@/src/store/hooks";
+import { selectUser } from "@/src/store/slices/authSlice";
+import { fetchMyTickets } from "@/src/services/portalService";
+
 export function MetricCards() {
+  const currentUser = useAppSelector(selectUser);
+  const [metrics, setMetrics] = useState(ticketMetrics);
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      fetchMyTickets({ customerId: currentUser.id, limit: 100 }).then((data) => {
+        let open = 0, inProgress = 0, resolved = 0, closed = 0;
+        data.forEach((t: any) => {
+          if (t.status === "OPEN" || t.status === "PENDING") open++;
+          else if (t.status === "IN_PROGRESS" || t.status === "ASSIGNED") inProgress++;
+          else if (t.status === "RESOLVED") resolved++;
+          else if (t.status === "CLOSED") closed++;
+        });
+
+        setMetrics([
+          { ...ticketMetrics[0], count: open },
+          { ...ticketMetrics[1], count: inProgress },
+          { ...ticketMetrics[2], count: resolved },
+          { ...ticketMetrics[3], label: "Closed", count: closed },
+        ]);
+      }).catch(err => console.error("Failed to fetch stats", err));
+    }
+  }, [currentUser]);
+
   return (
     <div className="grid grid-cols-1 gap-gutter sm:grid-cols-2 lg:grid-cols-4">
-      {ticketMetrics.map(({ label, count, description, icon, iconClass }) => {
+      {metrics.map(({ label, count, description, icon, iconClass }) => {
         const Icon = iconMap[icon];
         return (
           <div

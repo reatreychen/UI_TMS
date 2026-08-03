@@ -62,7 +62,13 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
   const getDashboardHref = () => {
     if (userRole === "admin") return "/admin/dashboard";
     if (userRole === "agent") return "/agent/dashboard";
-    return "/customer/dashboard";
+    return "/customer/my-ticket";
+  };
+
+  const getMyTicketsHref = () => {
+    if (userRole === "admin") return "/admin/users";
+    if (userRole === "agent") return "/agent/tickets";
+    return "/customer/my-ticket";
   };
 
   // Prevent SSR vs Client hydration mismatch by ensuring client-only auth state renders after mount
@@ -217,7 +223,7 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
                     </div>
 
                     <Link
-                      href="/customer/my-ticket"
+                      href={getDashboardHref()}
                       onClick={() => setIsMenuOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-on-surface hover:bg-surface-container-low transition-colors"
                     >
@@ -228,7 +234,7 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
                     </Link>
                     
                     <Link
-                      href="/customer/my-ticket"
+                      href={getMyTicketsHref()}
                       onClick={() => setIsMenuOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-on-surface hover:bg-surface-container-low transition-colors"
                     >

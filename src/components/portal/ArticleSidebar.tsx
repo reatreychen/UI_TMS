@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Headset } from "lucide-react";
-import { ARTICLE_TOC, RELATED_ARTICLES } from "@/src/data/articleDetail";
+import { ARTICLE_TOC, RELATED_ARTICLES } from "@/src/constants/articleDetail";
 
 export function ArticleSidebar() {
   return (

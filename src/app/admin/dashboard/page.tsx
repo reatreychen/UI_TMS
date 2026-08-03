@@ -33,6 +33,7 @@ export default function AdminDashboardPage() {
 
   // State for agent actions dropdown
   const [activeAgentMenu, setActiveAgentMenu] = useState<string | null>(null);
+  const [removedAgentNames, setRemovedAgentNames] = useState<string[]>([]);
 
   // New ticket form state
   const [newSubject, setNewSubject] = useState("");
@@ -145,6 +146,26 @@ export default function AdminDashboardPage() {
     setShowToast(true);
     setTimeout(() => setShowToast(false), 4000);
   };
+
+  const handleViewTelemetry = (agentName: string) => {
+    setActiveAgentMenu(null);
+    triggerToast(`Opening telemetry for ${agentName}.`);
+  };
+
+  const handleReassignQueue = (agentName: string) => {
+    setActiveAgentMenu(null);
+    triggerToast(`Queue reassignment started for ${agentName}.`);
+  };
+
+  const handleRemoveAgent = (agentName: string) => {
+    if (!window.confirm(`Remove ${agentName} from the active agent list?`)) return;
+
+    setRemovedAgentNames((current) => [...current, agentName]);
+    setActiveAgentMenu(null);
+    triggerToast(`${agentName} removed from the active agent list.`);
+  };
+
+  const visibleAgents = agents.filter((agent) => !removedAgentNames.includes(agent.name));
 
   const handleCreateTicket = (e: React.FormEvent) => {
     e.preventDefault();
@@ -571,10 +592,11 @@ export default function AdminDashboardPage() {
               <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Active Tickets</span>
             </div>
             
-            {agents.map((agent) => {
+            {visibleAgents.map((agent, agentIndex) => {
               const totalCapacity = 20;
               const usagePct = (agent.openTickets / totalCapacity) * 100;
               const barColor = usagePct > 70 ? 'bg-error' : usagePct > 40 ? 'bg-primary' : 'bg-green-500';
+              const opensUpward = visibleAgents.length > 1 && agentIndex >= visibleAgents.length - 2;
 
               return (
                 <div
@@ -632,20 +654,31 @@ export default function AdminDashboardPage() {
                       </button>
                       
                       {activeAgentMenu === agent.name && (
-                        <div className="absolute right-0 top-full mt-1 w-48 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl z-50 p-2 animate-in fade-in zoom-in-95 duration-100">
-                          <Link 
-                            href="/admin/dashboard/telemetry"
+                        <div
+                          className={`absolute right-0 w-48 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl z-50 p-2 animate-in fade-in zoom-in-95 duration-100 ${
+                            opensUpward ? "bottom-full mb-1" : "top-full mt-1"
+                          }`}
+                        >
+                          <Link
+                            href={`/admin/dashboard/telemetry?agent=${encodeURIComponent(agent.name)}`}
+                            onClick={() => handleViewTelemetry(agent.name)}
                             className="w-full flex items-center gap-3 px-3 py-2 text-body-md text-on-surface hover:bg-surface-container-low rounded-lg transition-colors cursor-pointer"
                           >
                             <span className="material-symbols-outlined text-[18px]">visibility</span>
                             View Telemetry
                           </Link>
-                          <button className="w-full flex items-center gap-3 px-3 py-2 text-body-md text-on-surface hover:bg-surface-container-low rounded-lg transition-colors cursor-pointer">
+                          <button
+                            onClick={() => handleReassignQueue(agent.name)}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-body-md text-on-surface hover:bg-surface-container-low rounded-lg transition-colors cursor-pointer"
+                          >
                             <span className="material-symbols-outlined text-[18px]">call_split</span>
                             Reassign Queue
                           </button>
                           <div className="my-1 border-t border-outline-variant" />
-                          <button className="w-full flex items-center gap-3 px-3 py-2 text-body-md text-error hover:bg-error-container/20 rounded-lg transition-colors cursor-pointer">
+                          <button
+                            onClick={() => handleRemoveAgent(agent.name)}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-body-md text-error hover:bg-error-container/20 rounded-lg transition-colors cursor-pointer"
+                          >
                             <span className="material-symbols-outlined text-[18px]">delete</span>
                             Remove Agent
                           </button>

@@ -56,7 +56,7 @@ export default function LoginPage() {
         } else if (roleLower.includes("agent")) {
           router.push("/agent/dashboard");
         } else {
-          router.push("/customer/dashboard");
+          router.push("customer/knowledge-base");
         }
       }, 500);
     } catch (err: any) {

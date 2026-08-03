@@ -1,10 +1,10 @@
 import { Star, ShieldCheck } from "lucide-react";
-import { REPORTS_KPIS } from "@/src/data/agentReports";
+import type { ReportKPI } from "@/src/constants/agentReports";
 
-export function ReportsKPIs() {
+export function ReportsKPIs({ items }: { items: ReportKPI[] }) {
   return (
     <div className="mb-stack-lg grid grid-cols-1 gap-gutter md:grid-cols-2 lg:grid-cols-4">
-      {REPORTS_KPIS.map((kpi) => (
+      {items.map((kpi) => (
         <div
           key={kpi.label}
           className="rounded-xl border border-outline-variant bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-shadow hover:shadow-md"

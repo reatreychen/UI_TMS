@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,13 +15,10 @@ import {
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
-/* ── Schema ─────────────────────────────────────────────────────── */
+
 const schema = z.object({
   subject: z.string().min(3, "Subject must be at least 3 characters"),
-  category: z.enum(
-    ["technical", "billing", "feature", "account"],
-    { message: "Please select a category" }
-  ),
+  categoryId: z.string().min(1, "Please select a category"),
   priority: z.enum(["low", "medium", "high", "critical"]),
   description: z
     .string()
@@ -30,9 +27,14 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-import { PRIORITY_OPTIONS, CATEGORY_OPTIONS } from "@/src/data/appConfig";
+import { PRIORITY_OPTIONS } from "@/src/constants/appConfig";
+import {
+  createTicket,
+  fetchPublicCategories,
+  uploadTicketAttachment,
+  type BackendCategory,
+} from "@/src/services/portalService";
 
-/* ── Helpers ─────────────────────────────────────────────────────── */
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return (
@@ -43,16 +45,36 @@ function FieldError({ message }: { message?: string }) {
   );
 }
 
-/* ── Main Component ──────────────────────────────────────────────── */
-import { api } from "@/src/lib/api";
-import { useAppSelector } from "@/src/store/hooks";
+function getErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string | string[] } } }).response;
+    const message = response?.data?.message;
+    if (Array.isArray(message)) return message.join(", ");
+    if (typeof message === "string") return message;
+  }
+  if (error instanceof Error) return error.message;
+  return "Failed to submit ticket. Please try again.";
+}
+
+import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { selectUser } from "@/src/store/slices/authSlice";
+import { submitTicketThunk, resetTicketState } from "@/src/store/slices/ticketSlice";
+import { fetchCategoriesThunk } from "@/src/store/slices/categorySlice";
 
 export function CreateTicketForm() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const currentUser = useAppSelector(selectUser);
+  const { isSubmitting: isReduxSubmitting } = useAppSelector((state) => state.ticket);
+  const { data, loading: categoriesLoading } = useAppSelector((state) => state.category);
+  const categories = data?.data || [];
+  
   const [dragOver, setDragOver] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+
+  useEffect(() => {
+    dispatch(fetchCategoriesThunk());
+  }, [dispatch]);
 
   const {
     register,
@@ -92,24 +114,43 @@ export function CreateTicketForm() {
 
   /* Submit */
   const onSubmit = async (values: FormValues) => {
+    if (!currentUser?.id) {
+      toast.error("You must be logged in to submit a ticket.");
+      return;
+    }
+
     try {
-      if (currentUser?.id) {
-        await api.post("/tickets", {
-          customerId: currentUser.id,
-          subject: values.subject,
-          description: values.description,
-          priority: values.priority.toUpperCase(),
-        });
+      const resultAction = await dispatch(
+        submitTicketThunk({
+          payload: {
+            customerId: currentUser.id,
+            subject: values.subject,
+            description: values.description,
+            priority: values.priority.toUpperCase() as
+              | "LOW"
+              | "MEDIUM"
+              | "HIGH"
+              | "CRITICAL",
+            categoryId: values.categoryId,
+          },
+          files,
+          uploadedById: currentUser.id,
+        })
+      );
+
+      if (submitTicketThunk.fulfilled.match(resultAction)) {
+        toast.success("Ticket submitted successfully! Redirecting to My Tickets…");
+        reset();
+        setFiles([]);
+        dispatch(resetTicketState());
+        setTimeout(() => router.push("/customer/my-ticket"), 1200);
+      } else {
+        toast.error(
+          (resultAction.payload as string) || "Failed to submit ticket."
+        );
       }
-      toast.success("Ticket submitted successfully! Redirecting to My Tickets…");
-      reset();
-      setFiles([]);
-      setTimeout(() => router.push("/customer/dashboard"), 1200);
-    } catch (err: any) {
-      toast.success("Ticket submitted successfully! Redirecting to My Tickets…");
-      reset();
-      setFiles([]);
-      setTimeout(() => router.push("/customer/dashboard"), 1200);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
     }
   };
 
@@ -168,27 +209,28 @@ export function CreateTicketForm() {
             {/* Category */}
             <div className="space-y-base">
               <label
-                htmlFor="category"
+                htmlFor="categoryId"
                 className="block text-label-md text-on-surface-variant"
               >
                 Category <span className="text-error">*</span>
               </label>
               <select
-                id="category"
-                aria-invalid={errors.category ? "true" : "false"}
-                {...register("category")}
-                className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-stack-sm py-stack-sm text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
+                id="categoryId"
+                disabled={categoriesLoading}
+                aria-invalid={errors.categoryId ? "true" : "false"}
+                {...register("categoryId")}
+                className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-stack-sm py-stack-sm text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="" disabled>
-                  Select a category
+                  {categoriesLoading ? "Loading categories…" : "Select a category"}
                 </option>
-                {CATEGORY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
                   </option>
                 ))}
               </select>
-              <FieldError message={errors.category?.message} />
+              <FieldError message={errors.categoryId?.message} />
             </div>
           </div>
         </section>
@@ -350,10 +392,10 @@ export function CreateTicketForm() {
           </button>
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isReduxSubmitting}
             className="flex items-center gap-2 rounded-lg bg-primary px-container-margin py-stack-sm text-body-md font-bold text-on-primary shadow-sm transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? (
+            {isSubmitting || isReduxSubmitting ? (
               <>
                 <Loader2 className="size-4 animate-spin" aria-hidden />
                 Processing…

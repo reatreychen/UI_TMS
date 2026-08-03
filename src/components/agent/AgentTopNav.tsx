@@ -1,6 +1,5 @@
 "use client";
 
-import { Search, List, KanbanSquare, Bell, HelpCircle } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
@@ -26,46 +25,113 @@ export function AgentTopNav() {
     router.push("/login");
   };
 
+  const notifications = [
+    { id: 1, title: "High Latency Alert", desc: "Database latency in EU-West spiked over 300ms", time: "10m ago", type: "alert" },
+    { id: 2, title: "New Critical Ticket", desc: "#TK-4819 SSO Authentication failure", time: "25m ago", type: "ticket" },
+    { id: 3, title: "CSAT Weekly Milestone", desc: "Customer satisfaction reached 4.82 average", time: "2h ago", type: "success" },
+  ];
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-outline-variant bg-surface px-container-margin py-3 shadow-sm">
-      <div className="flex flex-1 items-center gap-stack-lg">
-        {/* Search Bar */}
-        <div className="relative w-full max-w-md">
-          <Search
-            aria-hidden
-            className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-on-surface-variant"
-          />
+    <header className="sticky top-0 z-30 w-full bg-surface border-b border-outline-variant flex items-center justify-between px-gutter h-16 ml-[280px] max-w-[calc(100%-280px)]">
+      {/* Search Input Bar */}
+      <div className="flex items-center flex-1 max-w-xl">
+        <div className="relative w-full group">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">
+            search
+          </span>
           <input
             type="text"
-            placeholder="Search tickets, customers, or ID..."
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-low py-2 pl-10 pr-4 text-body-md transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("admin-search", { detail: e.target.value }));
+              }
+            }}
+            placeholder="Search tickets, agents, or knowledge base..."
+            className="w-full bg-surface-container-low border-none rounded-full py-2 pl-10 pr-10 text-body-md focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all outline-none"
           />
-        </div>
-
-        {/* View Switcher */}
-        <div className="flex items-center rounded-lg border border-outline-variant bg-surface-container-low p-1">
-          <button className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-on-surface-variant transition-colors hover:bg-surface-container-high">
-            <List aria-hidden className="size-4.5" />
-            <span className="text-label-md">List View</span>
-          </button>
-          <button className="flex items-center gap-1.5 rounded-md bg-surface-container-lowest px-3 py-1.5 font-bold text-primary shadow-sm ring-1 ring-black/5 transition-all">
-            <KanbanSquare aria-hidden className="size-4.5" fill="currentColor" />
-            <span className="text-label-md">Kanban</span>
-          </button>
+          {searchQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("admin-search", { detail: "" }));
+                }
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        <button className="relative flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-low">
-          <Bell aria-hidden className="size-5.5" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-surface bg-error"></span>
-        </button>
-        <button className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-low">
-          <HelpCircle aria-hidden className="size-5.5" />
+      {/* Top Bar Right Actions */}
+      <div className="flex items-center gap-4 relative">
+        {/* Notifications Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowNotifications(!showNotifications);
+              setShowProfileMenu(false);
+              setHasUnread(false);
+            }}
+            className="p-2 text-on-surface-variant hover:bg-surface-container-low rounded-full transition-colors relative cursor-pointer"
+            title="Notifications"
+          >
+            <span className="material-symbols-outlined">notifications</span>
+            {hasUnread && (
+              <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full ring-2 ring-surface animate-pulse" />
+            )}
+          </button>
+
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-80 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl z-50 p-4 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between border-b border-outline-variant pb-3 mb-3">
+                <h3 className="font-bold text-on-surface text-body-lg">Notifications</h3>
+                <span className="text-[11px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                  3 New
+                </span>
+              </div>
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {notifications.map((n) => (
+                  <div
+                    key={n.id}
+                    className="p-2.5 rounded-lg hover:bg-surface-container-low transition-colors cursor-pointer border border-transparent hover:border-outline-variant/40"
+                  >
+                    <div className="flex items-center justify-between text-body-md font-semibold text-on-surface">
+                      <span>{n.title}</span>
+                      <span className="text-[10px] text-outline font-normal">{n.time}</span>
+                    </div>
+                    <p className="text-label-md text-on-surface-variant mt-1 leading-snug">{n.desc}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-2 border-t border-outline-variant text-center">
+                <button
+                  onClick={() => setShowNotifications(false)}
+                  className="text-xs text-primary font-semibold hover:underline"
+                >
+                  Mark all as read
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Help Button */}
+        <button
+          onClick={() => {
+            alert("Kinetic Admin Help Center & Documentation loaded.");
+          }}
+          className="p-2 text-on-surface-variant hover:bg-surface-container-low rounded-full transition-colors cursor-pointer"
+          title="Help & Support"
+        >
+          <span className="material-symbols-outlined">help</span>
         </button>
 
-        <div className="mx-2 h-8 w-px bg-outline-variant"></div>
+        <div className="h-8 w-[1px] bg-outline-variant mx-1" />
 
         {/* User Profile Badge */}
         <div className="relative">

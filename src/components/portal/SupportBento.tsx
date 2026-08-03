@@ -1,5 +1,5 @@
 import { ArrowRight, BookOpen, Headphones, Users } from "lucide-react";
-import { supportCards as cards } from "@/src/data/knowledgeBase";
+import { supportCards as cards } from "@/src/constants/knowledgeBase";
 
 export function SupportBento() {
   return (

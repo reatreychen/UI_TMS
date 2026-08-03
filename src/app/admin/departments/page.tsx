@@ -1,18 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import {
+  adminAgentService,
+  AgentRecord,
+} from "@/src/services/adminAgentService";
+import { AdminDepartment } from "@/src/services/adminUserService";
 
-interface AgentRecord {
-  id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-  initials?: string;
-  role: string;
-  queue: string;
-  status: "Online" | "Away (Lunch)" | "On Break" | "Offline";
-  activeTickets: number;
-  capacityPct: number;
+function getErrorMessage(error: unknown) {
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string | string[] } } }).response;
+    const message = response?.data?.message;
+    if (Array.isArray(message)) return message.join(", ");
+    if (message) return message;
+  }
+
+  if (error instanceof Error) return error.message;
+  return "Something went wrong. Please try again.";
 }
 
 export default function DepartmentsPage() {
@@ -26,79 +30,59 @@ export default function DepartmentsPage() {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [departments, setDepartments] = useState<AdminDepartment[]>([]);
+  const [agentRoleId, setAgentRoleId] = useState<string | null>(null);
+  const [rowsPerPage] = useState(10);
 
   // Add Agent Form State
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState("Tier I Specialist");
-  const [newQueue, setNewQueue] = useState("Technical");
+  const [newDepartmentId, setNewDepartmentId] = useState("");
 
-  // Initial Agent Dataset matching mockup
-  const initialAgents: AgentRecord[] = [
-    {
-      id: "AGT-001",
-      name: "Sarah Jenkins",
-      email: "sarah.j@kinetic.io",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCQqsonCfW7co1HG2lk5KO0cEAqqPmEq3fuzQ9Htmz3ecuzRcEX9Gd-0bNzqG-5xDmggNEHOynLrlzbFDYw7Yoqzzh1cikXUPkM5KewwNR8CGoqoNLyLgOSmHTxj5Dw1urSiP3vAIkCAEwXDuT53mBes-rvkX0-ECfvEy_AL3y8obXTk7ia6CwpygaEnx3esI4iwupD3w_llSoaDvA_BgNfgEooi6Ikl4W0DF6jnZDCWoksNC7glPi-hDhc1aobL0ZuCrvFApe2Ujwu",
-      role: "Senior Specialist",
-      queue: "Technical",
-      status: "Online",
-      activeTickets: 8,
-      capacityPct: 80,
-    },
-    {
-      id: "AGT-002",
-      name: "Michael Chen",
-      email: "m.chen@kinetic.io",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuAPnW_mS5EmStCoks_eV1dAa8cgCjT04sm2WaOEJEz_jfUTUOUCnIORrMR2LlRifJs0nFbEGsMWvQPOpAih2yViFWY_FSFQwl0GfMvvAeJeDjrVSxMwuKQyn4USC0RsuIdKddwdvote1LIXqgKKz-hKTftvHWt4b1toYGHyA3Snl_2G9A3z5TueWed2bI5YKjeZnx2PB4cW56fximfbc2xKK01RI8NBLvAjwHO6VMlcjChxu8wyZUYpW-jAhnyCBex7iryTiRK42WyK",
-      role: "Lead Engineer",
-      queue: "Critical Support",
-      status: "Away (Lunch)",
-      activeTickets: 3,
-      capacityPct: 30,
-    },
-    {
-      id: "AGT-003",
-      name: "Elena Rodriguez",
-      email: "elena.r@kinetic.io",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuB-SI0kG6btC2NsD6Wr2qXGWDQIHka3tgIZfBwc8Ljflx9UZ8jjV-kn1yy1ZjfE8ODf_33q3mZRpxtMmsbSrB8GDYS6RZcv4gczP5YlraJGSyjubXsZh6fQZJjOyr0YbVMdkHiKsz49J_HaTa1QodQ-oaveGoIwEpqVFpkVoW4ZNOgQKYMBsehzLM7C-VWmqgxdVGscz5D2lehSiXmS9SHli9YgwQy14Y0Y5kWB9Gp-ChXlg1MSC8tARgZmiKlynnFLLUj-JxDZnVXC",
-      role: "Associate",
-      queue: "Billing",
-      status: "On Break",
-      activeTickets: 12,
-      capacityPct: 100,
-    },
-    {
-      id: "AGT-004",
-      name: "Marcus Thorne",
-      email: "m.thorne@kinetic.io",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuBpPRTgu8Z1v14bFocQ-k5qss9KpVonrbUZxwW_yxu_-atTZ1SwkhzspPc2XDyIy_XETv6KBq6VM44o2ZJuvPYAaDOFloSeWHDphGzD6NNVVi3Blluc7aX9SLjHawhV7F58frMllFKxU975IqsMiq3xumRWsV3ZXHoolg5ksHMGlZVHtdSyaXiZJlPeXqL0BtzKdDLO3PeAOhh_jjFyU3WqiEKLkKB_Vz-hmg_EgN9wWhw0pxexX7WRkQA0CPtai03xYX2BoBes24Cw",
-      role: "Tier II Specialist",
-      queue: "Technical",
-      status: "Online",
-      activeTickets: 6,
-      capacityPct: 60,
-    },
-    {
-      id: "AGT-005",
-      name: "James Smith",
-      email: "jsmith@kinetic.io",
-      initials: "JS",
-      role: "Junior Specialist",
-      queue: "General",
-      status: "Offline",
-      activeTickets: 0,
-      capacityPct: 0,
-    },
-  ];
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
 
-  const [agents, setAgents] = useState<AgentRecord[]>(initialAgents);
+  const stats = useMemo(() => adminAgentService.computeStats(agents), [agents]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadAgentData() {
+      setIsLoading(true);
+      setErrorMessage("");
+
+      try {
+        const data = await adminAgentService.getAgentManagementData();
+        if (!mounted) return;
+
+        setAgents(data.agents);
+        setDepartments(data.departments);
+        setAgentRoleId(data.agentRoleId);
+        setNewDepartmentId((current) => current || data.departments[0]?.id || "");
+      } catch (error) {
+        if (!mounted) return;
+        setErrorMessage(getErrorMessage(error));
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    loadAgentData();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Listen to global admin header search
   useEffect(() => {
     const handleSearch = (e: Event) => {
       const customEvt = e as CustomEvent<string>;
       setSearchQuery(customEvt.detail || "");
+      setCurrentPage(1);
     };
 
     window.addEventListener("admin-search", handleSearch);
@@ -113,45 +97,69 @@ export default function DepartmentsPage() {
 
   const handleExportData = () => {
     setIsExporting(true);
-    setTimeout(() => {
-      setIsExporting(false);
-      triggerToast("Agent telemetry & workload data exported (CSV).");
-    }, 800);
+
+    const headers = ["id", "name", "email", "role", "queue", "status", "activeTickets", "capacityPct"];
+    const csv = [
+      headers.join(","),
+      ...filteredAgents.map((agent) =>
+        headers
+          .map((header) => `"${String(agent[header as keyof AgentRecord] ?? "").replace(/"/g, '""')}"`)
+          .join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "agent-management.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+
+    setIsExporting(false);
+    triggerToast("Agent telemetry & workload data exported (CSV).");
   };
 
-  const handleAddAgentSubmit = (e: React.FormEvent) => {
+  const handleAddAgentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newEmail.trim()) return;
 
-    const names = newName.trim().split(" ");
-    const initials =
-      names.length > 1
-        ? `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
-        : names[0].substring(0, 2).toUpperCase();
+    setIsSaving(true);
+    try {
+      const created = await adminAgentService.createAgent(
+        {
+          fullName: newName.trim(),
+          email: newEmail.trim(),
+          jobTitle: newRole,
+          departmentId: newDepartmentId || undefined,
+        },
+        agentRoleId
+      );
 
-    const newAgentRecord: AgentRecord = {
-      id: `AGT-${Math.floor(100 + Math.random() * 900)}`,
-      name: newName.trim(),
-      email: newEmail.trim(),
-      initials,
-      role: newRole,
-      queue: newQueue,
-      status: "Online",
-      activeTickets: 0,
-      capacityPct: 0,
-    };
-
-    setAgents([newAgentRecord, ...agents]);
-    setNewName("");
-    setNewEmail("");
-    setShowAddModal(false);
-    triggerToast(`Agent ${newAgentRecord.name} onboarded successfully!`);
+      setAgents((current) => [created, ...current]);
+      setNewName("");
+      setNewEmail("");
+      setShowAddModal(false);
+      triggerToast(`Agent ${created.name} onboarded successfully!`);
+    } catch (error) {
+      triggerToast(getErrorMessage(error));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleRemoveAgent = (id: string, name: string) => {
-    setAgents(agents.filter((a) => a.id !== id));
-    setActiveMenuId(null);
-    triggerToast(`Agent ${name} removed from active roster.`);
+  const handleRemoveAgent = async (id: string, name: string) => {
+    setIsSaving(true);
+    try {
+      await adminAgentService.removeAgent(id);
+      setAgents((current) => current.filter((agent) => agent.id !== id));
+      setActiveMenuId(null);
+      triggerToast(`Agent ${name} removed from active roster.`);
+    } catch (error) {
+      triggerToast(getErrorMessage(error));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Filtered & Sorted Agents
@@ -184,6 +192,13 @@ export default function DepartmentsPage() {
       return b.capacityPct - a.capacityPct; // Performance/capacity default
     });
 
+  const pageCount = Math.max(1, Math.ceil(filteredAgents.length / rowsPerPage));
+  const safeCurrentPage = Math.min(currentPage, pageCount);
+  const pagedAgents = filteredAgents.slice(
+    (safeCurrentPage - 1) * rowsPerPage,
+    safeCurrentPage * rowsPerPage
+  );
+
   return (
     <div className="space-y-stack-lg max-w-7xl mx-auto w-full animate-in fade-in duration-300">
       {/* Page Header */}
@@ -193,7 +208,7 @@ export default function DepartmentsPage() {
             Agent Management
           </h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-            Monitor and manage support team performance, workload, and live availability.
+            Monitor and manage support team performance, workload, and live availability from the live API.
           </p>
         </div>
         <div className="flex gap-stack-md">
@@ -217,6 +232,12 @@ export default function DepartmentsPage() {
         </div>
       </div>
 
+      {errorMessage && (
+        <div className="rounded-lg border border-error/30 bg-error-container/20 px-4 py-3 text-error font-body-md">
+          {errorMessage}
+        </div>
+      )}
+
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-stack-md">
         {/* Card 1 */}
@@ -225,8 +246,8 @@ export default function DepartmentsPage() {
             Total Agents
           </span>
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-display text-on-surface font-bold">42</span>
-            <span className="text-green-600 font-label-md text-label-md font-bold">+4% vs last month</span>
+            <span className="font-display text-display text-on-surface font-bold">{stats.totalAgents}</span>
+            <span className="text-on-surface-variant font-label-md text-label-md">Live roster</span>
           </div>
         </div>
 
@@ -236,8 +257,8 @@ export default function DepartmentsPage() {
             Available Now
           </span>
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-display text-primary font-bold">28</span>
-            <span className="text-on-surface-variant font-label-md text-label-md">67% capacity</span>
+            <span className="font-display text-display text-primary font-bold">{stats.availableNow}</span>
+            <span className="text-on-surface-variant font-label-md text-label-md">{stats.availabilityPct}% capacity</span>
           </div>
         </div>
 
@@ -349,14 +370,20 @@ export default function DepartmentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant font-body-md text-body-md">
-              {filteredAgents.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-outline">
+                    Loading agents from API...
+                  </td>
+                </tr>
+              ) : pagedAgents.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-outline">
                     No matching agents found for your search/filters.
                   </td>
                 </tr>
               ) : (
-                filteredAgents.map((agent) => (
+                pagedAgents.map((agent) => (
                   <tr key={agent.id} className="hover:bg-primary/5 transition-colors group relative">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-3">
@@ -467,54 +494,24 @@ export default function DepartmentsPage() {
         {/* Pagination Footer */}
         <div className="px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface-container-low border-t border-outline-variant">
           <p className="font-label-md text-label-md text-on-surface-variant font-medium">
-            Showing 1 to {filteredAgents.length} of {agents.length} agents
+            Showing {filteredAgents.length === 0 ? 0 : (safeCurrentPage - 1) * rowsPerPage + 1} to{" "}
+            {Math.min(safeCurrentPage * rowsPerPage, filteredAgents.length)} of {filteredAgents.length} agents
           </p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(Math.max(1, safeCurrentPage - 1))}
+              disabled={safeCurrentPage === 1}
               className="p-1 rounded-lg border border-outline-variant text-outline hover:bg-white transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               <span className="material-symbols-outlined">chevron_left</span>
             </button>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setCurrentPage(1)}
-                className={`w-8 h-8 rounded-lg font-label-md text-label-md flex items-center justify-center font-bold cursor-pointer ${
-                  currentPage === 1 ? "bg-primary text-on-primary" : "border border-transparent hover:border-outline-variant text-on-surface-variant"
-                }`}
-              >
-                1
-              </button>
-              <button
-                onClick={() => setCurrentPage(2)}
-                className={`w-8 h-8 rounded-lg font-label-md text-label-md flex items-center justify-center font-bold cursor-pointer ${
-                  currentPage === 2 ? "bg-primary text-on-primary" : "border border-transparent hover:border-outline-variant text-on-surface-variant"
-                }`}
-              >
-                2
-              </button>
-              <button
-                onClick={() => setCurrentPage(3)}
-                className={`w-8 h-8 rounded-lg font-label-md text-label-md flex items-center justify-center font-bold cursor-pointer ${
-                  currentPage === 3 ? "bg-primary text-on-primary" : "border border-transparent hover:border-outline-variant text-on-surface-variant"
-                }`}
-              >
-                3
-              </button>
-              <span className="px-1 text-on-surface-variant">...</span>
-              <button
-                onClick={() => setCurrentPage(9)}
-                className={`w-8 h-8 rounded-lg font-label-md text-label-md flex items-center justify-center font-bold cursor-pointer ${
-                  currentPage === 9 ? "bg-primary text-on-primary" : "border border-transparent hover:border-outline-variant text-on-surface-variant"
-                }`}
-              >
-                9
-              </button>
-            </div>
+            <span className="font-label-md text-label-md text-on-surface-variant">
+              Page {safeCurrentPage} of {pageCount}
+            </span>
             <button
-              onClick={() => setCurrentPage(currentPage + 1)}
-              className="p-1 rounded-lg border border-outline-variant text-outline hover:bg-white transition-colors cursor-pointer"
+              onClick={() => setCurrentPage(Math.min(pageCount, safeCurrentPage + 1))}
+              disabled={safeCurrentPage === pageCount}
+              className="p-1 rounded-lg border border-outline-variant text-outline hover:bg-white transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               <span className="material-symbols-outlined">chevron_right</span>
             </button>
@@ -597,14 +594,19 @@ export default function DepartmentsPage() {
                   Assigned Queue
                 </label>
                 <select
-                  value={newQueue}
-                  onChange={(e) => setNewQueue(e.target.value)}
+                  value={newDepartmentId}
+                  onChange={(e) => setNewDepartmentId(e.target.value)}
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-body-md focus:ring-2 focus:ring-primary outline-none cursor-pointer"
                 >
-                  <option value="Technical">Technical Support</option>
-                  <option value="Critical Support">Critical Support</option>
-                  <option value="Billing">Billing &amp; Accounts</option>
-                  <option value="General">General Inquiries</option>
+                  {departments.length === 0 ? (
+                    <option value="">No departments available</option>
+                  ) : (
+                    departments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -618,9 +620,10 @@ export default function DepartmentsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-body-md font-semibold bg-primary text-on-primary rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-sm cursor-pointer"
+                  disabled={isSaving}
+                  className="px-5 py-2 text-body-md font-semibold bg-primary text-on-primary rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  Onboard Agent
+                  {isSaving ? "Saving..." : "Onboard Agent"}
                 </button>
               </div>
             </form>

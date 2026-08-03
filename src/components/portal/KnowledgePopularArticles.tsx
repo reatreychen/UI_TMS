@@ -1,6 +1,6 @@
 import { FileText } from "lucide-react";
 import Link from "next/link";
-import { articles } from "@/src/data/knowledgeBase";
+import { articles } from "@/src/constants/knowledgeBase";
 
 export function KnowledgePopularArticles() {
   return (

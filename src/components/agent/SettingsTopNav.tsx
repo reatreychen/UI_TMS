@@ -1,6 +1,6 @@
 import { Search, Bell, HelpCircle, LayoutGrid } from "lucide-react";
 import Image from "next/image";
-import { AGENT_PROFILE } from "@/src/data/agentSettings";
+import { AGENT_PROFILE } from "@/src/constants/agentSettings";
 
 export function SettingsTopNav() {
   return (

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BookOpen, ShieldCheck, HelpCircle } from "lucide-react";
-import { resources } from "@/src/data/knowledgeBase";
+import { resources } from "@/src/constants/knowledgeBase";
 
 export function CreateTicketSidebar() {
   return (
