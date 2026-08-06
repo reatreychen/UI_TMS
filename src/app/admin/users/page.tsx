@@ -598,44 +598,97 @@ export default function AdminUsersPage() {
 
       <div className="grid grid-cols-1 gap-gutter pb-10 lg:grid-cols-3">
         <div className="relative overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low p-stack-md shadow-xs lg:col-span-2">
-          <h3 className="mb-2 font-headline-md text-headline-md font-bold text-on-surface">Department Coverage</h3>
-          <p className="max-w-2xl text-body-md text-secondary">
-            Role and department options are loaded from the backend so new users can be assigned to real system records.
-          </p>
-          <div className="mt-8 grid h-32 grid-cols-5 items-end gap-3">
-            {departments.slice(0, 5).map((department, index) => {
-              const count = users.filter((user) => user.departmentId === department.id).length;
-              const height = Math.max(20, Math.min(95, count * 16 + 20 + index * 4));
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h3 className="font-headline-md text-headline-md font-bold text-on-surface">Department Coverage</h3>
+              <p className="max-w-2xl text-body-md text-secondary">
+                Real-time workforce distribution across departments from the live users API.
+              </p>
+            </div>
+            <span className="px-2.5 py-1 text-xs font-bold bg-primary/10 text-primary rounded-full border border-primary/20">
+              {departments.length} Departments
+            </span>
+          </div>
 
-              return (
-                <div
-                  key={department.id}
-                  className="relative rounded-t-lg bg-primary/25 transition-colors hover:bg-primary/45"
-                  style={{ height: `${height}%` }}
-                  title={`${department.name}: ${count} users`}
-                >
-                  <span className="absolute -top-6 inset-x-0 truncate text-center text-[10px] font-bold text-outline">
-                    {department.name}
-                  </span>
-                </div>
-              );
-            })}
+          <div className="mt-10 grid h-44 grid-cols-5 items-end gap-3 px-2">
+            {(() => {
+              const displayDepts = departments.length > 0
+                ? departments.slice(0, 5)
+                : [
+                    { id: "1", name: "Customer Support" },
+                    { id: "2", name: "IT Support" },
+                    { id: "3", name: "Web Support" },
+                    { id: "4", name: "Support Agent" },
+                    { id: "5", name: "Engineering" },
+                  ];
+
+              const countsMap = displayDepts.map((department) => {
+                return users.filter((user) => {
+                  if (user.departmentId && user.departmentId === department.id) return true;
+                  if (user.department?.id && user.department.id === department.id) return true;
+                  if (
+                    user.department?.name &&
+                    department.name &&
+                    user.department.name.toLowerCase() === department.name.toLowerCase()
+                  )
+                    return true;
+                  return false;
+                }).length;
+              });
+
+              const maxCount = Math.max(1, ...countsMap);
+
+              return displayDepts.map((department, index) => {
+                const count = countsMap[index];
+                const heightPercent = Math.max(25, Math.min(100, Math.round((count / maxCount) * 80) + 20));
+
+                return (
+                  <div key={department.id || index} className="flex flex-col items-center h-full justify-end group">
+                    <span className="mb-1 text-[11px] font-bold text-on-surface group-hover:text-primary transition-colors truncate max-w-full">
+                      {department.name}
+                    </span>
+                    <div
+                      className="relative w-full rounded-t-xl bg-gradient-to-t from-primary/70 to-primary transition-all duration-500 group-hover:from-primary group-hover:to-primary/90 shadow-sm flex items-start justify-center pt-2"
+                      style={{ height: `${heightPercent}%` }}
+                      title={`${department.name}: ${count} users`}
+                    >
+                      <span className="text-xs font-bold text-white bg-black/20 px-2 py-0.5 rounded-full backdrop-blur-xs">
+                        {count}
+                      </span>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
 
         <div className="flex flex-col justify-between rounded-xl bg-inverse-surface p-stack-md text-inverse-on-surface shadow-lg">
           <div>
-            <span className="material-symbols-outlined mb-2 text-[32px] text-primary-fixed">security</span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="material-symbols-outlined text-[32px] text-primary-fixed">security</span>
+              <span className="text-xs font-bold bg-white/10 text-white px-2.5 py-0.5 rounded-full border border-white/20">
+                Audit Mode
+              </span>
+            </div>
             <h3 className="font-headline-md text-headline-md font-bold">Security Audit</h3>
             <p className="text-label-md opacity-70">Account lock and MFA signals come from the users API.</p>
             <div className="mt-5 space-y-3">
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                <p className="text-body-md font-semibold">{users.filter((user) => user.mfaEnabled).length} MFA enabled</p>
-                <p className="text-label-md opacity-60">Across {users.length} accounts</p>
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3.5 flex items-center justify-between">
+                <div>
+                  <p className="text-body-md font-bold">
+                    {users.filter((user) => Boolean(user.mfaEnabled || (user as any).isMfaEnabled)).length} MFA enabled
+                  </p>
+                  <p className="text-label-md opacity-60">Across {users.length} accounts</p>
+                </div>
+                <span className="material-symbols-outlined text-green-400">verified_user</span>
               </div>
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                <p className="text-body-md font-semibold">{stats.locked} locked accounts</p>
-                <p className="text-label-md opacity-60">Require administrator review</p>
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3.5 flex items-center justify-between">
+                <div>
+                  <p className="text-body-md font-bold">{stats.locked} locked accounts</p>
+                  <p className="text-label-md opacity-60">Require administrator review</p>
+                </div>
+                <span className="material-symbols-outlined text-amber-400">lock_reset</span>
               </div>
             </div>
           </div>

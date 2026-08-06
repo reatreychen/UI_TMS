@@ -9,6 +9,7 @@ export function AdminSidebar() {
   const navItems = [
     { name: "Overview", href: "/admin/dashboard", icon: "dashboard" },
     { name: "User Management", href: "/admin/users", icon: "group" },
+    { name: "Department Management", href: "/admin/departments-management", icon: "corporate_fare" },
     { name: "Agent Management", href: "/admin/departments", icon: "support_agent" },
     { name: "Permissions", href: "/admin/permissions", icon: "admin_panel_settings" },
     { name: "Categories", href: "/admin/categories", icon: "category" },

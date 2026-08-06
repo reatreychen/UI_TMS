@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { selectUser, logout } from "@/src/store/slices/authSlice";
+import { NotificationBell } from "@/src/components/NotificationBell";
 
 export function AdminHeader() {
   const router = useRouter();
@@ -11,9 +12,7 @@ export function AdminHeader() {
   const user = useAppSelector(selectUser);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [hasUnread, setHasUnread] = useState(true);
 
   const displayName = user?.fullName || "Admin User";
   const displayEmail = user?.email || "admin@kinetic-tms.com";
@@ -24,12 +23,6 @@ export function AdminHeader() {
     dispatch(logout());
     router.push("/login");
   };
-
-  const notifications = [
-    { id: 1, title: "High Latency Alert", desc: "Database latency in EU-West spiked over 300ms", time: "10m ago", type: "alert" },
-    { id: 2, title: "New Critical Ticket", desc: "#TK-4819 SSO Authentication failure", time: "25m ago", type: "ticket" },
-    { id: 3, title: "CSAT Weekly Milestone", desc: "Customer satisfaction reached 4.82 average", time: "2h ago", type: "success" },
-  ];
 
   return (
     <header className="sticky top-0 z-30 w-full bg-surface border-b border-outline-variant flex items-center justify-between px-gutter h-16 ml-[280px] max-w-[calc(100%-280px)]">
@@ -69,56 +62,8 @@ export function AdminHeader() {
 
       {/* Top Bar Right Actions */}
       <div className="flex items-center gap-4 relative">
-        {/* Notifications Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => {
-              setShowNotifications(!showNotifications);
-              setShowProfileMenu(false);
-              setHasUnread(false);
-            }}
-            className="p-2 text-on-surface-variant hover:bg-surface-container-low rounded-full transition-colors relative cursor-pointer"
-            title="Notifications"
-          >
-            <span className="material-symbols-outlined">notifications</span>
-            {hasUnread && (
-              <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full ring-2 ring-surface animate-pulse" />
-            )}
-          </button>
-
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl z-50 p-4 animate-in fade-in zoom-in-95 duration-150">
-              <div className="flex items-center justify-between border-b border-outline-variant pb-3 mb-3">
-                <h3 className="font-bold text-on-surface text-body-lg">Notifications</h3>
-                <span className="text-[11px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                  3 New
-                </span>
-              </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    className="p-2.5 rounded-lg hover:bg-surface-container-low transition-colors cursor-pointer border border-transparent hover:border-outline-variant/40"
-                  >
-                    <div className="flex items-center justify-between text-body-md font-semibold text-on-surface">
-                      <span>{n.title}</span>
-                      <span className="text-[10px] text-outline font-normal">{n.time}</span>
-                    </div>
-                    <p className="text-label-md text-on-surface-variant mt-1 leading-snug">{n.desc}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 pt-2 border-t border-outline-variant text-center">
-                <button
-                  onClick={() => setShowNotifications(false)}
-                  className="text-xs text-primary font-semibold hover:underline"
-                >
-                  Mark all as read
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Notifications Bell — connected to Redux + WebSocket */}
+        <NotificationBell />
 
         {/* Help Button */}
         <button
@@ -138,7 +83,6 @@ export function AdminHeader() {
           <div
             onClick={() => {
               setShowProfileMenu(!showProfileMenu);
-              setShowNotifications(false);
             }}
             className="flex items-center gap-3 pl-2 cursor-pointer group rounded-lg p-1 hover:bg-surface-container-low transition-colors"
           >
@@ -160,15 +104,21 @@ export function AdminHeader() {
                 <p className="text-xs text-outline">{displayEmail}</p>
               </div>
               <button
-                onClick={() => setShowProfileMenu(false)}
-                className="w-full text-left px-3 py-2 text-body-md text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors flex items-center gap-2"
+                onClick={() => {
+                  setShowProfileMenu(false);
+                  router.push("/agent/profile");
+                }}
+                className="w-full text-left px-3 py-2 text-body-md text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">person</span>
                 Profile Settings
               </button>
               <button
-                onClick={() => setShowProfileMenu(false)}
-                className="w-full text-left px-3 py-2 text-body-md text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors flex items-center gap-2"
+                onClick={() => {
+                  setShowProfileMenu(false);
+                  router.push("/admin/audit-logs");
+                }}
+                className="w-full text-left px-3 py-2 text-body-md text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">security</span>
                 Security Log

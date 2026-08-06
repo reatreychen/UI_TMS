@@ -201,6 +201,17 @@ export async function fetchTicket(id: string) {
   return res.data?.data ?? res.data;
 }
 
+export interface TicketAttachment {
+  id: string;
+  ticketId?: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  fileUrl: string;
+  uploadedById?: string;
+  createdAt?: string;
+}
+
 export async function uploadTicketAttachment(
   ticketId: string,
   uploadedById: string,
@@ -213,6 +224,11 @@ export async function uploadTicketAttachment(
     params: { ticketId, uploadedById },
     headers: { "Content-Type": "multipart/form-data" },
   });
+}
+
+export async function fetchTicketAttachments(ticketId: string): Promise<TicketAttachment[]> {
+  const res = await api.get(`/ticket-attachments/ticket/${ticketId}`);
+  return res.data?.data ?? [];
 }
 
 export async function createTicketComment(payload: {

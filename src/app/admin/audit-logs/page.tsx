@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { fetchAuditLogs } from "@/src/services/auditLogService";
 import { adminUserService } from "@/src/services/adminUserService";
 
@@ -32,76 +33,10 @@ export default function AuditLogsPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [rowsPerPage] = useState(10);
 
-  const initialLogs: AuditLogRow[] = [
-    {
-      id: "LOG-1001",
-      timestamp: "2026-10-14 14:22:01",
-      user: "Alex Chen",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuB99YeAUskvkHZjvnm2Z5TXXwClWUzk-fVqx_l_Ks62T7nUbhVYmcmGPuh5ZOgoNmEMpKoh569MiedQn3HFqHryJ5Ku4YwC5mdPWmFkHrfsA4rQfSojixfTeTqCTY6AkqI-kzvl-wIco_fRXKeqJHnHuX88nIjuRsoPmujK-VbbNpPTnHFLluX-ANfobhpE-vUQq_6RFX9kn7YrY_roK0IZuvMsjwewcSj8XoY9B1Ra_HAvFzDBiikQ3qvj_n1FJFEB5EYbqbAzFG6a",
-      entity: "Ticket_Config",
-      entityId: "#992-XC",
-      action: "UPDATE",
-      ipAddress: "192.168.1.144",
-      browserSignature: "Chrome/117.0.0.0",
-      fullUserAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
-      payloadHash: "0x8f2a91b4c731e05d94bc6",
-    },
-    {
-      id: "LOG-1002",
-      timestamp: "2026-10-14 13:05:45",
-      user: "Sarah Jenkins",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuArqdja1UL6ZB5gUcFwjGIeIxZJ1-REz22roVMx4zp_S2z_V4e3uSq-LKJl1eUuGxmGEhhL-_tdW5TlsXdwcocJthucfOQNnDoCkiKekgHao3kQFFTGaP_QlXHllbGsyEnKAnC0-3FejcMqnRgj4slF2vYeyV06aDUeUl343gjQGYcJznMcBtrillEljDXO0nz126H8LXUh9lPV6312BUqrKg1TcXfoEFOa-lF3sXliIm5Jphd9jR8orNBkO-46dJK4cL5jxanGi3eC",
-      entity: "System_Access",
-      entityId: "UID-8812",
-      action: "LOGIN",
-      ipAddress: "172.24.9.12",
-      browserSignature: "Safari/16.6",
-      fullUserAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15",
-      payloadHash: "0x4e12c6a911f4d8b2e5910",
-    },
-    {
-      id: "LOG-1003",
-      timestamp: "2026-10-14 12:44:12",
-      user: "Marcus Vane",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuDjnYrJwwX4XrThJtdnPf9Y59jzgDV4QHVit0ptVTT7vGhP2aGnnUltSVuVaqc3oiPIXEJbPQoAGlRt_rx-bGSjyc8hA52Q45MDWrNhNO753EYIBVOlRwbH1WJq0yQa3RcaFjZrBsUon86jSD44mkiQITUg7AAFje4D1q_8JMhJRxkjN7SuNTswtCf_L-tbM_g6xetN-8cezFnNA1fzI4V22iGuqRsbVptjbrDsHysj5l0hNweyy2M5U-fQn-ZGQHIVNBBnud09Q24N",
-      entity: "Audit_Log_Export",
-      entityId: "EXP-77",
-      action: "EXPORT",
-      ipAddress: "10.0.0.45",
-      browserSignature: "Firefox/118.0",
-      fullUserAgent: "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:118.0) Gecko/20100101 Firefox/118.0",
-      payloadHash: "0x77c2a10459eb19a0f329d",
-    },
-    {
-      id: "LOG-1004",
-      timestamp: "2026-10-14 11:15:33",
-      user: "Elena Rodriguez",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCrZXEmnKVEw7gmc7dqKmE3z-oYHcP-eepvwJJ5R1SiVFJfHPazl7aBuCDp_Gv-jJ5LtW9J3H7Z9OwyIa3dmqqvySUdW-IPBxsz-PfxkV1zjrZgWSIC3W2EcGd2cQilnrLrtUywnyNwZVO9yVIe2QPx_wUQwCMh9mLQDf1C75M5FDgpCx5ctI9RIzSJYM9A1DmYxL5aHVRqDtPleQmVPWxEwlGz9_XcXiLyVk3qLGxyt8MXF3APYralFb-PkpEzt_X4sBnR8-v7_5pg",
-      entity: "User_Profile",
-      entityId: "USR-004",
-      action: "DELETE",
-      ipAddress: "45.76.12.8",
-      browserSignature: "Edge/117.0.2045.47",
-      fullUserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.47",
-      payloadHash: "0x9911e3b7d1000cf56aa21",
-    },
-    {
-      id: "LOG-1005",
-      timestamp: "2026-10-14 10:50:09",
-      user: "System Daemon",
-      entity: "Global_Config",
-      entityId: "SYS-MAIN",
-      action: "AUTOMATION",
-      ipAddress: "::1 (Local)",
-      browserSignature: "CronJob/TaskScheduler",
-      fullUserAgent: "Kinetic-Daemon-Internal-Worker/4.2.1-stable",
-      payloadHash: "0x1102aef773b092c45189f",
-    },
-  ];
+  const initialLogs: AuditLogRow[] = [];
 
   const [logs, setLogs] = useState<AuditLogRow[]>(initialLogs);
 
-  // Global search bar listener
   useEffect(() => {
     const handleSearch = (e: Event) => {
       const customEvt = e as CustomEvent<string>;
@@ -140,18 +75,37 @@ export default function AuditLogsPage() {
         const usersById = new Map(users.map((user) => [user.id, user]));
         setLogs(
           records.map((record) => {
-            const user = record.userId ? usersById.get(record.userId) : undefined;
+            const userId = record.userId || record.user_id;
+            const fetchedUser = userId ? usersById.get(userId) : undefined;
+            const userName = record.user?.fullName || record.user?.name || fetchedUser?.fullName || userId || "System";
+            const userAvatar = record.user?.profileImage || record.user?.avatarUrl || fetchedUser?.profileImage;
+            const rawTime = record.createdAt || record.created_at;
+
+            let formattedTime = "—";
+            if (rawTime) {
+              try {
+                const dateObj = new Date(rawTime);
+                if (!isNaN(dateObj.getTime())) {
+                  formattedTime = format(dateObj, "yyyy-MM-dd HH:mm:ss");
+                } else {
+                  formattedTime = String(rawTime);
+                }
+              } catch {
+                formattedTime = String(rawTime);
+              }
+            }
+
             return {
               id: record.id,
-              timestamp: record.createdAt,
-              user: user?.fullName || record.userId || "System",
-              avatar: user?.profileImage || undefined,
-              entity: record.entity,
-              entityId: record.entityId,
-              action: record.action,
-              ipAddress: record.ipAddress || "—",
-              browserSignature: record.browserSignature || "—",
-              fullUserAgent: record.browserSignature || undefined,
+              timestamp: formattedTime,
+              user: userName,
+              avatar: userAvatar || undefined,
+              entity: record.entity || "System",
+              entityId: record.entityId || record.entity_id || "—",
+              action: record.action || "LOG",
+              ipAddress: record.ipAddress || record.ip_address || "—",
+              browserSignature: record.browserSignature || record.browser_signature || "—",
+              fullUserAgent: record.browserSignature || record.browser_signature || undefined,
             };
           }),
         );

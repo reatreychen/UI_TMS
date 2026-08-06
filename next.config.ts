@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Allow Cloudflare Tunnel domain for Next.js dev server
+  // @ts-ignore
+  allowedDevOrigins: ["tms.sv50.uk", "api-tms.sv50.uk", "localhost:3000"],
   images: {
     remotePatterns: [
       {

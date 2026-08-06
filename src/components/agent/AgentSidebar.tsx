@@ -126,7 +126,7 @@ export function AgentSidebar() {
             aria-hidden
             className={`size-5 ${pathname === "/agent/settings" ? "text-primary" : ""}`}
           />
-          Support
+          Support &amp; Resources
         </Link>
       </nav>
 
@@ -137,7 +137,7 @@ export function AgentSidebar() {
             className="flex items-center gap-3 rounded-lg px-3 py-2 text-on-surface-variant hover:bg-surface-container-high"
           >
             <Settings aria-hidden className="size-5" />
-            <span className="text-label-md font-label-md font-medium">Settings</span>
+            <span className="text-label-md font-label-md font-medium">My Profile</span>
           </Link>
           <button
             onClick={handleLogout}

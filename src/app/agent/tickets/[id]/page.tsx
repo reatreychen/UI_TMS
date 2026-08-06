@@ -78,6 +78,7 @@ export default function AgentTicketDetailPage() {
         escalations: 0,
       },
       internalNotes: [],
+      attachments: t.attachments || [],
     };
   }, [rawTicket]);
 
@@ -149,6 +150,7 @@ export default function AgentTicketDetailPage() {
             customerId={rawTicket.customer?.id}
             customerName={ticketData.requester}
             customerAvatarUrl={ticketData.customerProfile.avatarUrl}
+            attachments={ticketData.attachments}
           />
           <AgentTicketSidebar ticket={ticketData} />
         </div>

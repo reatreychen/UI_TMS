@@ -4,6 +4,7 @@ import ticketReducer from "./slices/ticketSlice";
 import categoryReducer from "./slices/categorySlice";
 import permissionReducer from "./slices/permissionSlice";
 import agentTicketReducer from "./slices/agentTicketSlice";
+import notificationReducer from "./slices/notificationSlice";
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     category: categoryReducer,
     permission: permissionReducer,
     agentTicket: agentTicketReducer,
+    notifications: notificationReducer,
   },
 });
 

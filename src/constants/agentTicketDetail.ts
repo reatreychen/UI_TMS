@@ -2,9 +2,14 @@ export type AgentMessageType = "system" | "agent" | "customer";
 export type ResponseSlaStatus = "overdue" | "on_track" | "warning";
 
 export interface AgentTicketAttachment {
-  name: string;
-  size: string;
-  type: string;
+  id?: string;
+  fileName?: string;
+  fileType?: string;
+  fileSize?: number;
+  fileUrl?: string;
+  name?: string;
+  size?: string;
+  type?: string;
 }
 
 export interface AgentTicketMessage {
@@ -53,6 +58,7 @@ export interface AgentTicketDetail {
   serviceMetrics: AgentServiceMetrics;
   internalNotes: AgentInternalNote[];
   messages: AgentTicketMessage[];
+  attachments?: AgentTicketAttachment[];
 }
 
 export const MOCK_AGENT_TICKET_DETAIL: AgentTicketDetail = {

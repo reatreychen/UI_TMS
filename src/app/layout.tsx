@@ -21,6 +21,7 @@ export const metadata = {
 
 import { AuthProvider } from "@/src/providers/AuthProvider";
 import { ReduxProvider } from "@/src/providers/ReduxProvider";
+import { NotificationProvider } from "@/src/providers/NotificationProvider";
 
 export default function RootLayout({
   children,
@@ -38,8 +39,10 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <ReduxProvider>
           <AuthProvider>
-            {children}
-            <ToastProvider />
+            <NotificationProvider>
+              {children}
+              <ToastProvider />
+            </NotificationProvider>
           </AuthProvider>
         </ReduxProvider>
       </body>

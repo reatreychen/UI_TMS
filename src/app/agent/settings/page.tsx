@@ -271,6 +271,67 @@ export default function AgentSupportPage() {
         </section>
       </div>
 
+      {/* Agent Workstation Preferences */}
+      <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/60 pb-3">
+          <div>
+            <h3 className="font-headline-md text-headline-md font-bold text-on-surface flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">tune</span>
+              Workstation &amp; Notification Preferences
+            </h3>
+            <p className="text-body-md text-on-surface-variant">Customize your local agent portal workspace settings.</p>
+          </div>
+          <button
+            onClick={() => triggerToast("Workstation preferences saved!")}
+            className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-base">save</span>
+            Save Preferences
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-outline-variant">
+            <div>
+              <p className="font-bold text-sm text-on-surface">Desktop Push Notifications</p>
+              <p className="text-xs text-on-surface-variant">Receive instant alert when a high-priority ticket is assigned.</p>
+            </div>
+            <input type="checkbox" defaultChecked className="size-5 accent-primary cursor-pointer" />
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-outline-variant">
+            <div>
+              <p className="font-bold text-sm text-on-surface">Audio Alert Chime</p>
+              <p className="text-xs text-on-surface-variant">Play notification sound when customer replies in active chat.</p>
+            </div>
+            <input type="checkbox" defaultChecked className="size-5 accent-primary cursor-pointer" />
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-outline-variant">
+            <div>
+              <p className="font-bold text-sm text-on-surface">Live Chat Polling Interval</p>
+              <p className="text-xs text-on-surface-variant">Frequency of background ticket comment sync.</p>
+            </div>
+            <select className="px-3 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg text-xs font-bold text-on-surface outline-none">
+              <option value="3000">3 Seconds (Fast)</option>
+              <option value="5000">5 Seconds (Balanced)</option>
+              <option value="10000">10 Seconds (Power Saver)</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-outline-variant">
+            <div>
+              <p className="font-bold text-sm text-on-surface">Default Queue View</p>
+              <p className="text-xs text-on-surface-variant">Initial view layout when opening queue list.</p>
+            </div>
+            <select className="px-3 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg text-xs font-bold text-on-surface outline-none">
+              <option value="detailed">Expanded Rows</option>
+              <option value="compact">Compact Grid</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
       {/* Help Contact Footer */}
       <div className="p-6 md:p-8 bg-surface-container rounded-xl border border-outline-variant flex flex-col md:flex-row items-center justify-between gap-6 shadow-xs">
         <div className="flex items-center gap-6">

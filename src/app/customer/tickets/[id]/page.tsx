@@ -37,6 +37,13 @@ interface CustomerTicket {
   category?: { name?: string };
   customer?: { id: string };
   assignedAgent?: { fullName?: string; name?: string };
+  attachments?: {
+    id: string;
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    fileUrl: string;
+  }[];
 }
 
 export default function TicketDetailPage() {
@@ -52,6 +59,16 @@ export default function TicketDetailPage() {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isFirstLoadRef = useRef(true);
+  const userScrolledUpRef = useRef(false);
+
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 120;
+    userScrolledUpRef.current = !isNearBottom;
+  };
 
   const loadTicketData = useCallback(async (showLoading = false) => {
     if (!id) return;
@@ -108,7 +125,14 @@ export default function TicketDetailPage() {
   }, [loadTicketData]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length === 0) return;
+
+    if (isFirstLoadRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "auto" });
+      isFirstLoadRef.current = false;
+    } else if (!userScrolledUpRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   const handleSend = async () => {
@@ -142,6 +166,11 @@ export default function TicketDetailPage() {
         if (previous.some((message) => message.id === newMessage.id)) return previous;
         return [...previous, newMessage];
       });
+
+      userScrolledUpRef.current = false;
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
 
       void loadTicketData();
     } catch (err) {
@@ -221,7 +250,11 @@ export default function TicketDetailPage() {
           </div>
 
           {/* Timeline */}
-          <div className="flex-1 space-y-stack-md overflow-y-auto custom-scrollbar pr-1 min-h-[400px] border border-outline-variant bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className="flex-1 space-y-stack-md overflow-y-auto custom-scrollbar pr-1 min-h-[400px] border border-outline-variant bg-surface-container-lowest rounded-xl p-6 shadow-sm"
+          >
             {messages.map((msg, i) => {
               if (msg.type === "event") {
                 return (
@@ -282,9 +315,9 @@ export default function TicketDetailPage() {
               value={reply}
               onChange={(e) => setReply(e.target.value)}
               onKeyDown={handleKeyDown}
-              rows={5}
-              placeholder="Type your reply here..."
-              className="w-full p-4 min-h-[120px] focus:outline-none resize-none font-body-md text-body-md placeholder:text-outline bg-transparent"
+              rows={2}
+              placeholder="Type your reply here... (Press Ctrl + Enter to send)"
+              className="w-full px-4 py-2.5 min-h-[64px] focus:outline-none resize-none font-body-md text-body-md placeholder:text-outline bg-transparent"
             />
             <div className="p-3 border-t border-outline-variant flex justify-between items-center bg-surface-container-lowest">
               <span className="text-label-md text-on-surface-variant">
@@ -351,6 +384,45 @@ export default function TicketDetailPage() {
               </div>
             </div>
           </section>
+
+          {/* Attachments Section */}
+          {ticket.attachments && ticket.attachments.length > 0 && (
+            <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-md shadow-sm">
+              <h2 className="text-label-md font-bold text-on-surface-variant uppercase tracking-wider mb-4">
+                Attachments ({ticket.attachments.length})
+              </h2>
+              <div className="grid grid-cols-2 gap-2">
+                {ticket.attachments.map((att) => {
+                  const isImg = att.fileType?.startsWith("image/") || /\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i.test(att.fileName);
+                  return (
+                    <a
+                      key={att.id}
+                      href={att.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group relative aspect-square overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low block"
+                    >
+                      {isImg ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={att.fileUrl}
+                          alt={att.fileName}
+                          className="h-full w-full object-cover opacity-85 transition-all group-hover:scale-105 group-hover:opacity-100"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-on-surface-variant">
+                          <span className="material-symbols-outlined text-[28px]">description</span>
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-2 py-1 text-[10px] text-white backdrop-blur-xs">
+                        {att.fileName}
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </aside>
       </main>
 
