@@ -54,6 +54,8 @@ export interface UpdateAdminUserPayload {
   roleId?: string | null;
   departmentId?: string | null;
   isActive?: boolean;
+  accountLocked?: boolean;
+  failedLoginAttempts?: number;
 }
 
 export const adminUserService = {

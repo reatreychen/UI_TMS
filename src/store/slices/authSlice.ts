@@ -222,25 +222,27 @@ export const authSlice = createSlice({
 export const { setUser, logout, clearError } = authSlice.actions;
 
 // Selectors
-export const selectAuth = (state: RootState) => state.auth;
-export const selectUser = (state: RootState) => state.auth.user;
-export const selectIsAuthenticated = (state: RootState) => state.auth.isAuthenticated;
+export const selectAuth = (state: RootState) => state?.auth;
+export const selectUser = (state: RootState) => state?.auth?.user ?? null;
+export const selectIsAuthenticated = (state: RootState) => Boolean(state?.auth?.isAuthenticated);
 
 export const selectRoleName = (state: RootState): RoleName => {
-  const user = state.auth.user;
+  const user = state?.auth?.user;
   if (!user) return "unknown";
 
   let rawRole = "";
   if (typeof user.role === "string") {
     rawRole = user.role;
-  } else if (user.role && typeof user.role.name === "string") {
-    rawRole = user.role.name;
+  } else if (user.role && typeof (user.role as any).name === "string") {
+    rawRole = (user.role as any).name;
+  } else if (user.jobTitle && typeof user.jobTitle === "string") {
+    rawRole = user.jobTitle;
   }
 
   const normalized = rawRole.toLowerCase();
-  if (normalized.includes("admin")) return "admin";
-  if (normalized.includes("agent")) return "agent";
-  if (normalized.includes("customer")) return "customer";
+  if (normalized.includes("admin") || normalized.includes("super")) return "admin";
+  if (normalized.includes("agent") || normalized.includes("support") || normalized.includes("specialist") || normalized.includes("engineer")) return "agent";
+  if (normalized.includes("customer") || normalized.includes("user")) return "customer";
   return "customer";
 };
 

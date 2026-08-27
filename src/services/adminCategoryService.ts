@@ -12,6 +12,7 @@ export interface Category {
   name: string;
   department_id: string;
   department?: AdminDepartment;
+  itemCount?: number;
 }
 
 export interface PaginatedCategories {

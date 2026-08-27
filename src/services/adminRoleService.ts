@@ -32,6 +32,11 @@ export const adminRoleService = {
     return res.data.data;
   },
 
+  async createPermission(payload: { module: string; action: string }): Promise<AdminPermission> {
+    const res = await api.post("/permissions", payload);
+    return res.data.data;
+  },
+
   async getRolePermissions(roleId: string): Promise<AdminPermission[]> {
     const res = await api.get(`/roles/${roleId}/permissions`);
     return res.data.data;

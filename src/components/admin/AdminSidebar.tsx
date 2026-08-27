@@ -36,7 +36,9 @@ export function AdminSidebar() {
       {/* Main Navigation */}
       <nav className="flex-1 space-y-1">
         {navItems.map((item) => {
-          const isActive = pathname === item.href || (item.href !== "/admin/dashboard" && pathname.startsWith(item.href));
+          const isActive =
+            pathname === item.href ||
+            (item.href !== "/admin/dashboard" && pathname.startsWith(`${item.href}/`));
           return (
             <Link
               key={item.name}
@@ -55,39 +57,6 @@ export function AdminSidebar() {
           );
         })}
       </nav>  
-
-      {/* Bottom Footer Actions */}
-      <div className="mt-auto pt-stack-md border-t border-outline-variant space-y-1">
-        <button
-          onClick={() => {
-            if (typeof window !== "undefined") {
-              const event = new CustomEvent("open-new-ticket-modal");
-              window.dispatchEvent(event);
-            }
-          }}
-          className="w-full mb-4 bg-primary-container hover:bg-primary text-on-primary-container hover:text-on-primary py-2.5 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer"
-        >
-          <span className="material-symbols-outlined text-[20px]">add</span>
-          <span className="font-body-md text-body-md">New Ticket</span>
-        </button>
-
-        <Link
-          href="/admin/roles"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-secondary hover:bg-surface-container-high transition-colors duration-200 ${
-            pathname === "/admin/roles" ? "bg-secondary-container text-on-secondary-container font-semibold" : ""
-          }`}
-        >
-          <span className="material-symbols-outlined">settings</span>
-          <span className="font-body-md text-body-md">Settings</span>
-        </Link>
-        <Link
-          href="/admin/knowledge-base"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-secondary hover:bg-surface-container-high transition-colors duration-200"
-        >
-          <span className="material-symbols-outlined">help</span>
-          <span className="font-body-md text-body-md">Help & Docs</span>
-        </Link>
-      </div>
     </aside>
   );
 }

@@ -44,6 +44,7 @@ export default function DepartmentsPage() {
   const [newDepartmentId, setNewDepartmentId] = useState("");
 
   const [agents, setAgents] = useState<AgentRecord[]>([]);
+  const [editingAgent, setEditingAgent] = useState<AgentRecord | null>(null);
 
   const stats = useMemo(() => adminAgentService.computeStats(agents), [agents]);
 
@@ -120,27 +121,56 @@ export default function DepartmentsPage() {
     triggerToast("Agent telemetry & workload data exported (CSV).");
   };
 
+  const handleStartEditAgent = (agent: AgentRecord) => {
+    setActiveMenuId(null);
+    setEditingAgent(agent);
+    setNewName(agent.name);
+    setNewEmail(agent.email);
+    setNewRole(agent.role);
+    setNewDepartmentId(departments.find((d) => d.name === agent.queue)?.id || departments[0]?.id || "");
+    setShowAddModal(true);
+  };
+
   const handleAddAgentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newEmail.trim()) return;
 
     setIsSaving(true);
     try {
-      const created = await adminAgentService.createAgent(
-        {
-          fullName: newName.trim(),
-          email: newEmail.trim(),
-          jobTitle: newRole,
-          departmentId: newDepartmentId || undefined,
-        },
-        agentRoleId
-      );
+      if (editingAgent) {
+        setAgents((current) =>
+          current.map((a) =>
+            a.id === editingAgent.id
+              ? {
+                  ...a,
+                  name: newName.trim(),
+                  email: newEmail.trim(),
+                  role: newRole,
+                  queue: departments.find((d) => d.id === newDepartmentId)?.name || a.queue,
+                }
+              : a
+          )
+        );
+        triggerToast(`Agent ${newName.trim()} updated successfully!`);
+      } else {
+        const created = await adminAgentService.createAgent(
+          {
+            fullName: newName.trim(),
+            email: newEmail.trim(),
+            jobTitle: newRole,
+            departmentId: newDepartmentId || undefined,
+          },
+          agentRoleId
+        );
 
-      setAgents((current) => [created, ...current]);
+        setAgents((current) => [created, ...current]);
+        triggerToast(`Agent ${created.name} onboarded successfully!`);
+      }
+
       setNewName("");
       setNewEmail("");
+      setEditingAgent(null);
       setShowAddModal(false);
-      triggerToast(`Agent ${created.name} onboarded successfully!`);
     } catch (error) {
       triggerToast(getErrorMessage(error));
     } finally {
@@ -208,7 +238,7 @@ export default function DepartmentsPage() {
             Agent Management
           </h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-            Monitor and manage support team performance, workload, and live availability from the live API.
+            Track and manage support team performance, ticket workload, and active status.
           </p>
         </div>
         <div className="flex gap-stack-md">
@@ -243,29 +273,29 @@ export default function DepartmentsPage() {
         {/* Card 1 */}
         <div className="bg-surface-container-lowest p-stack-md rounded-lg border border-outline-variant shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
           <span className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider font-semibold">
-            Total Agents
+            Total Support Agents
           </span>
           <div className="flex items-baseline gap-2">
             <span className="font-display text-display text-on-surface font-bold">{stats.totalAgents}</span>
-            <span className="text-on-surface-variant font-label-md text-label-md">Live roster</span>
+            <span className="text-on-surface-variant font-label-md text-label-md">Active Team</span>
           </div>
         </div>
 
         {/* Card 2 */}
         <div className="bg-surface-container-lowest p-stack-md rounded-lg border border-outline-variant shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
           <span className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider font-semibold">
-            Available Now
+            Available Agents
           </span>
           <div className="flex items-baseline gap-2">
             <span className="font-display text-display text-primary font-bold">{stats.availableNow}</span>
-            <span className="text-on-surface-variant font-label-md text-label-md">{stats.availabilityPct}% capacity</span>
+            <span className="text-on-surface-variant font-label-md text-label-md">{stats.availabilityPct}% Online</span>
           </div>
         </div>
 
         {/* Card 3 */}
         <div className="bg-surface-container-lowest p-stack-md rounded-lg border border-outline-variant shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
           <span className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider font-semibold">
-            Avg. Handle Time
+            Avg. Resolution Time
           </span>
           <div className="flex items-baseline gap-2">
             <span className="font-display text-display text-on-surface font-bold">14m 20s</span>
@@ -276,7 +306,7 @@ export default function DepartmentsPage() {
         {/* Card 4 */}
         <div className="bg-surface-container-lowest p-stack-md rounded-lg border border-outline-variant shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
           <span className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider font-semibold">
-            Avg. CSAT per Agent
+            Avg. Customer Rating (CSAT)
           </span>
           <div className="flex items-baseline gap-2">
             <span className="font-display text-display text-on-surface font-bold">4.82</span>
@@ -302,13 +332,13 @@ export default function DepartmentsPage() {
             />
           </div>
 
-          {/* Queue Filter Dropdown */}
+          {/* Department Filter Dropdown */}
           <select
             value={queueFilter}
             onChange={(e) => setQueueFilter(e.target.value)}
             className="py-2 pl-3 pr-8 bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md text-secondary focus:ring-primary focus:border-primary outline-none cursor-pointer"
           >
-            <option value="Queue: All">Queue: All</option>
+            <option value="Queue: All">Department: All</option>
             <option value="Technical Support">Technical Support</option>
             <option value="Billing & Accounts">Billing &amp; Accounts</option>
             <option value="Enterprise Sales">Enterprise Sales / Critical</option>
@@ -358,7 +388,7 @@ export default function DepartmentsPage() {
                   Role/Tier
                 </th>
                 <th className="px-6 py-3 font-label-md text-label-md uppercase tracking-wider">
-                  Assigned Queue
+                  Department
                 </th>
                 <th className="px-6 py-3 font-label-md text-label-md uppercase tracking-wider">
                   Status
@@ -454,29 +484,16 @@ export default function DepartmentsPage() {
                       {activeMenuId === agent.id && (
                         <div className="absolute right-6 mt-1 w-44 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl z-50 p-1 text-left animate-in fade-in zoom-in-95 duration-150">
                           <button
-                            onClick={() => {
-                              setActiveMenuId(null);
-                              triggerToast(`Viewing telemetry profile for ${agent.name}`);
-                            }}
-                            className="w-full text-left px-3 py-2 text-xs font-medium text-on-surface hover:bg-surface-container-low rounded-lg flex items-center gap-2"
+                            onClick={() => handleStartEditAgent(agent)}
+                            className="w-full text-left px-3 py-2 text-xs font-medium text-on-surface hover:bg-surface-container-low rounded-lg flex items-center gap-2 cursor-pointer"
                           >
-                            <span className="material-symbols-outlined text-[16px]">visibility</span>
-                            View Telemetry
-                          </button>
-                          <button
-                            onClick={() => {
-                              setActiveMenuId(null);
-                              triggerToast(`Queues re-routed for ${agent.name}`);
-                            }}
-                            className="w-full text-left px-3 py-2 text-xs font-medium text-on-surface hover:bg-surface-container-low rounded-lg flex items-center gap-2"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">alt_route</span>
-                            Reassign Queue
+                            <span className="material-symbols-outlined text-[16px]">edit</span>
+                            Edit Agent
                           </button>
                           <div className="my-1 border-t border-outline-variant" />
                           <button
                             onClick={() => handleRemoveAgent(agent.id, agent.name)}
-                            className="w-full text-left px-3 py-2 text-xs font-medium text-error hover:bg-error-container/20 rounded-lg flex items-center gap-2"
+                            className="w-full text-left px-3 py-2 text-xs font-medium text-error hover:bg-error-container/20 rounded-lg flex items-center gap-2 cursor-pointer"
                           >
                             <span className="material-symbols-outlined text-[16px]">delete</span>
                             Remove Agent
@@ -532,11 +549,16 @@ export default function DepartmentsPage() {
           <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-outline-variant pb-3 mb-4">
               <h3 className="text-headline-md font-bold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">person_add</span>
-                Onboard New Support Agent
+                <span className="material-symbols-outlined text-primary">
+                  {editingAgent ? "edit" : "person_add"}
+                </span>
+                {editingAgent ? "Edit Agent Profile" : "Onboard New Support Agent"}
               </h3>
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  setShowAddModal(false);
+                  setEditingAgent(null);
+                }}
                 className="text-outline hover:text-on-surface cursor-pointer"
               >
                 <span className="material-symbols-outlined">close</span>
@@ -591,7 +613,7 @@ export default function DepartmentsPage() {
 
               <div>
                 <label className="block text-xs font-bold text-outline uppercase mb-1">
-                  Assigned Queue
+                  Department
                 </label>
                 <select
                   value={newDepartmentId}
@@ -623,7 +645,7 @@ export default function DepartmentsPage() {
                   disabled={isSaving}
                   className="px-5 py-2 text-body-md font-semibold bg-primary text-on-primary rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  {isSaving ? "Saving..." : "Onboard Agent"}
+                  {isSaving ? "Saving..." : editingAgent ? "Save Changes" : "Onboard Agent"}
                 </button>
               </div>
             </form>

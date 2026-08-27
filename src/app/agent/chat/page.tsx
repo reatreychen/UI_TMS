@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { fetchActiveChatSessions, ChatSession } from "@/src/services/chatService";
 import { LiveAgentChat } from "@/src/components/agent/LiveAgentChat";

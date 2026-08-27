@@ -97,6 +97,16 @@ export default function LoginPage() {
               </p>
             </div>
 
+            {/* Prominent Warning */}
+            {toastMessage && toastType === "error" && (
+              <div className="mb-5 p-3.5 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-semibold flex items-start gap-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <span className="material-symbols-outlined text-[20px] text-red-600 shrink-0 mt-0.5">
+                  warning
+                </span>
+                <p className="leading-snug">{toastMessage}</p>
+              </div>
+            )}
+
             {/* Form */}
             <form onSubmit={handleSignInSubmit} className="space-y-stack-md">
               <div className="space-y-1">

@@ -47,6 +47,23 @@ export const assignAgentTicketThunk = createAsyncThunk<
   }
 );
 
+export const updateAgentTicketStatusThunk = createAsyncThunk<
+  void,
+  { ticketId: string; status: string },
+  { state: RootState }
+>(
+  "agentTicket/updateStatus",
+  async ({ ticketId, status }, { dispatch, rejectWithValue }) => {
+    try {
+      await updateTicketStatus(ticketId, status);
+      dispatch(fetchAgentTicketThunk(ticketId));
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || "Failed to update status";
+      return rejectWithValue(msg);
+    }
+  }
+);
+
 export const resolveAgentTicketThunk = createAsyncThunk<
   void,
   { ticketId: string },
@@ -55,23 +72,7 @@ export const resolveAgentTicketThunk = createAsyncThunk<
   "agentTicket/resolve",
   async ({ ticketId }, { dispatch, rejectWithValue }) => {
     try {
-      // Re-fetch current status fresh from server to avoid stale state
-      const fresh = await fetchTicket(ticketId);
-      const currentStatus: string = fresh.status ?? "OPEN";
-
-      const path = getResolvePath(currentStatus);
-      if (path.length === 0) {
-        // Already resolved/closed — just refresh
-        dispatch(fetchAgentTicketThunk(ticketId));
-        return;
-      }
-
-      // Walk through each required transition one at a time
-      for (const nextStatus of path) {
-        await updateTicketStatus(ticketId, nextStatus);
-      }
-
-      // Refresh store with final state
+      await updateTicketStatus(ticketId, "RESOLVED");
       dispatch(fetchAgentTicketThunk(ticketId));
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || "Failed to resolve ticket";

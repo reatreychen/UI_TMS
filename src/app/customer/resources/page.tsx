@@ -225,18 +225,24 @@ export default function ResourcesPage() {
                 expertise to master enterprise-scale support operations.
               </p>
             </div>
-            {/* Decorative illustration */}
-            <div className="hidden md:flex h-[260px] items-center justify-center rounded-xl bg-surface-container border border-outline-variant relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary-fixed/40 to-secondary-container/40" />
-              <div className="relative z-10 text-center space-y-2">
-                <span className="material-symbols-outlined text-[64px] text-primary opacity-80">
-                  library_books
-                </span>
-                <p className="font-headline-md text-headline-md text-primary">
-                  Knowledge Hub
-                </p>
-                <p className="font-body-md text-body-md text-on-surface-variant">
-                  2,400+ resources &amp; growing
+            {/* Hero Image Card */}
+            <div className="hidden md:flex h-[260px] rounded-2xl border border-outline-variant relative overflow-hidden shadow-lg group">
+              <img
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCwXl3birODmYwQTy-7FS8eywojGpOzOSKp5fsGLU-3eLF3W7oJ49lrjF_wMxShZbueq8-0ZSAO9aRqxGEULbCzKnEYXf-4yphQDfWub9wDRD2iRpmaigRov1lWmSmI0ll0TGP6pzenST05bp7jzIA_Th68j5giu9eBZs7-y53PCZGJDb6ia5NhcDEpgfsWaWvtfC7ipz96wL-JA5kwHCCc0frg90sXqtZMQIahcGA_6DeXOAxlsAbe1bwCZF2ki10RyGFXmB9xtjTm"
+                alt="Enterprise Knowledge Hub Illustration"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent flex flex-col justify-end p-6 text-white">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="material-symbols-outlined text-primary-fixed-dim text-xl">
+                    library_books
+                  </span>
+                  <p className="font-headline-md font-bold text-white">
+                    Knowledge Hub
+                  </p>
+                </div>
+                <p className="text-xs text-slate-200 font-medium">
+                  2,400+ enterprise resources, whitepapers &amp; research guides
                 </p>
               </div>
             </div>

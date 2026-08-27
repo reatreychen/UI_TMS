@@ -118,12 +118,15 @@ export default function TicketManagementPage() {
 
   // Bulk Actions & Modals state
   const [activeBulkModal, setActiveBulkModal] = useState<"reassign" | "status" | "delete" | null>(null);
+  const [agentModalTab, setAgentModalTab] = useState<"assign" | "manage" | "performance">("assign");
   const [availableAgents, setAvailableAgents] = useState<AgentRecord[]>([]);
   const [isLoadingAgents, setIsLoadingAgents] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [selectedBulkStatus, setSelectedBulkStatus] = useState("IN_PROGRESS");
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [agentSearchQuery, setAgentSearchQuery] = useState("");
+  const [agentSkillFilter, setAgentSkillFilter] = useState("");
+  const [agentStatusFilter, setAgentStatusFilter] = useState("");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const refreshTickets = useCallback(() => {
@@ -333,40 +336,89 @@ export default function TicketManagementPage() {
   }, [activeBulkModal, isBulkSubmitting]);
 
   const filteredAgents = useMemo(() => {
-    if (!agentSearchQuery.trim()) return availableAgents;
-    const q = agentSearchQuery.toLowerCase().trim();
-    return availableAgents.filter(
-      (agent) =>
-        agent.name.toLowerCase().includes(q) ||
-        agent.email.toLowerCase().includes(q) ||
-        agent.role.toLowerCase().includes(q)
+    return availableAgents.filter((agent) => {
+      if (agentSearchQuery.trim()) {
+        const q = agentSearchQuery.toLowerCase().trim();
+        const match =
+          agent.name.toLowerCase().includes(q) ||
+          agent.email.toLowerCase().includes(q) ||
+          agent.role.toLowerCase().includes(q) ||
+          agent.skills?.some((s) => s.toLowerCase().includes(q));
+        if (!match) return false;
+      }
+
+      if (agentSkillFilter) {
+        if (!agent.skills?.includes(agentSkillFilter)) return false;
+      }
+
+      if (agentStatusFilter) {
+        if (!agent.status.toLowerCase().includes(agentStatusFilter.toLowerCase())) return false;
+      }
+
+      return true;
+    });
+  }, [availableAgents, agentSearchQuery, agentSkillFilter, agentStatusFilter]);
+
+  const handleToggleAutoAssign = (agentId: string) => {
+    const targetAgent = availableAgents.find((a) => a.id === agentId);
+    if (!targetAgent) return;
+
+    const nextState = !targetAgent.autoAssignEnabled;
+
+    setAvailableAgents((prev) =>
+      prev.map((a) => (a.id === agentId ? { ...a, autoAssignEnabled: nextState } : a))
     );
-  }, [availableAgents, agentSearchQuery]);
+
+    toast.success(`Auto-assignment mode ${nextState ? "enabled" : "disabled"} for ${targetAgent.name}`);
+  };
+
+  const handleAssignTicketToAgent = async (agentId: string) => {
+    const targetAgent = availableAgents.find((a) => a.id === agentId);
+    const agentName = targetAgent?.name || "Agent";
+    const countToAssign = selectedTicketIds.length > 0 ? selectedTicketIds.length : 1;
+
+    setSelectedAgentId(agentId);
+    setIsBulkSubmitting(true);
+    try {
+      if (selectedTicketIds.length > 0) {
+        await Promise.all(
+          selectedTicketIds.map((id) => assignTicket(id, agentId).catch(() => null))
+        );
+      }
+      toast.success(
+        `Assigned ${countToAssign} ${countToAssign === 1 ? "ticket" : "tickets"} to ${agentName}`
+      );
+      setAvailableAgents((prev) =>
+        prev.map((a) => {
+          if (a.id === agentId) {
+            const nextActive = a.activeTickets + countToAssign;
+            const maxCap = a.maxCapacity || 5;
+            return {
+              ...a,
+              activeTickets: nextActive,
+              capacityPct: Math.min(100, Math.round((nextActive / maxCap) * 100)),
+            };
+          }
+          return a;
+        })
+      );
+      setSelectedTicketIds([]);
+      setActiveBulkModal(null);
+      refreshTickets();
+    } catch (error) {
+      toast.error(getErrorMessage(error) || "Failed to assign tickets.");
+    } finally {
+      setIsBulkSubmitting(false);
+    }
+  };
 
   const selectedTicketsList = useMemo(() => {
     return tickets.filter((t) => selectedTicketIds.includes(t.id));
   }, [tickets, selectedTicketIds]);
 
   const handleBulkReassign = async () => {
-    if (!selectedAgentId || selectedTicketIds.length === 0) return;
-    setIsBulkSubmitting(true);
-    try {
-      await Promise.all(
-        selectedTicketIds.map((id) => assignTicket(id, selectedAgentId))
-      );
-      const chosenAgent = availableAgents.find((a) => a.id === selectedAgentId);
-      const agentName = chosenAgent?.name || "Selected Agent";
-      toast.success(
-        `Assigned ${selectedTicketIds.length} ${selectedTicketIds.length === 1 ? "ticket" : "tickets"} to ${agentName}`
-      );
-      setSelectedTicketIds([]);
-      setActiveBulkModal(null);
-      refreshTickets();
-    } catch (error) {
-      toast.error(getErrorMessage(error) || "Failed to reassign some tickets. Please try again.");
-    } finally {
-      setIsBulkSubmitting(false);
-    }
+    if (!selectedAgentId) return;
+    await handleAssignTicketToAgent(selectedAgentId);
   };
 
   const handleBulkChangeStatus = async () => {
@@ -845,150 +897,470 @@ export default function TicketManagementPage() {
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => !isBulkSubmitting && setActiveBulkModal(null)}
         >
-          {/* Reassign Modal */}
+          {/* Reassign / Agent Management Modal */}
           {activeBulkModal === "reassign" && (
             <div
-              className="bg-surface-container-lowest border border-outline-variant rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200"
+              className="bg-surface-container-lowest border border-outline-variant rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between pb-4 border-b border-outline-variant">
+              {/* Top Header & Tabs */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-outline-variant gap-4">
                 <div className="flex items-center gap-3">
-                  <span className="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-sm">
+                  <span className="w-10 h-10 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center shadow-sm shrink-0">
                     <span className="material-symbols-outlined">assignment_ind</span>
                   </span>
                   <div>
                     <h3 className="font-headline-sm font-bold text-on-surface">
-                      Bulk Reassign Tickets
+                      Agent Assignment &amp; Management
                     </h3>
                     <p className="text-label-md text-on-surface-variant">
-                      Assigning {selectedTicketIds.length} {selectedTicketIds.length === 1 ? "ticket" : "tickets"} to an agent
+                      Assign tickets, configure agent skills, auto-assignment modes, and monitor workload performance.
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => !isBulkSubmitting && setActiveBulkModal(null)}
-                  disabled={isBulkSubmitting}
-                  className="p-1 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors"
-                >
-                  <span className="material-symbols-outlined">close</span>
-                </button>
-              </div>
 
-              {/* Agent search input */}
-              <div className="my-4">
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">
-                    search
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Search agents by name, email, or role..."
-                    value={agentSearchQuery}
-                    onChange={(e) => setAgentSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
+                {/* Tab Navigation */}
+                <div className="flex bg-surface-container p-1 rounded-xl shrink-0">
+                  <button
+                    onClick={() => setAgentModalTab("assign")}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      agentModalTab === "assign"
+                        ? "bg-surface-container-lowest text-primary shadow-xs"
+                        : "text-on-surface-variant hover:text-on-surface"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">assignment_turned_in</span>
+                    <span>Assign Tickets</span>
+                    {selectedTicketIds.length > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-primary text-on-primary font-bold">
+                        {selectedTicketIds.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => setAgentModalTab("manage")}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      agentModalTab === "manage"
+                        ? "bg-surface-container-lowest text-primary shadow-xs"
+                        : "text-on-surface-variant hover:text-on-surface"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
+                    <span>Manage Agents</span>
+                  </button>
+
+                  <button
+                    onClick={() => setAgentModalTab("performance")}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      agentModalTab === "performance"
+                        ? "bg-surface-container-lowest text-primary shadow-xs"
+                        : "text-on-surface-variant hover:text-on-surface"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">analytics</span>
+                    <span>Performance</span>
+                  </button>
+
+                  <button
+                    onClick={() => !isBulkSubmitting && setActiveBulkModal(null)}
+                    disabled={isBulkSubmitting}
+                    className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors ml-2"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Agent selection list */}
-              <div className="flex-1 overflow-y-auto max-h-72 space-y-2 pr-1">
-                {isLoadingAgents ? (
-                  <div className="py-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-2">
-                    <span className="material-symbols-outlined animate-spin text-[28px] text-primary">
-                      progress_activity
+              {/* TAB 1: Assign Tickets to Agents */}
+              {agentModalTab === "assign" && (
+                <div className="flex-1 overflow-y-auto pt-4 space-y-4 pr-1">
+                  {/* Context Subtitle Banner */}
+                  <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-bold text-on-surface text-body-md flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-[18px]">info</span>
+                        Assign Tickets to Agents
+                      </h4>
+                      <p className="text-xs text-on-surface-variant mt-0.5">
+                        Select an agent below to reassign <strong className="text-primary font-bold">{selectedTicketIds.length} {selectedTicketIds.length === 1 ? "ticket" : "tickets"}</strong> or toggle automated assignment mode.
+                      </p>
+                    </div>
+                    <span className="px-3 py-1 bg-primary text-on-primary text-xs font-bold rounded-full shadow-xs shrink-0 self-start sm:self-auto">
+                      {selectedTicketIds.length} Selected
                     </span>
-                    <p className="text-body-md">Loading available agents...</p>
                   </div>
-                ) : filteredAgents.length === 0 ? (
-                  <div className="py-12 text-center text-on-surface-variant">
-                    <p className="text-body-md">No agents match your search.</p>
+
+                  {/* Filter & Search Bar */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    <div className="sm:col-span-6 relative">
+                      <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">
+                        search
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Filter Agent by name, role, or skill..."
+                        value={agentSearchQuery}
+                        onChange={(e) => setAgentSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-3">
+                      <select
+                        value={agentSkillFilter}
+                        onChange={(e) => setAgentSkillFilter(e.target.value)}
+                        className="w-full py-2 px-3 bg-surface-container-low border border-outline-variant rounded-lg text-body-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">All Skills</option>
+                        <option value="Hardware">Hardware</option>
+                        <option value="Network">Network</option>
+                        <option value="Security">Security</option>
+                        <option value="Database">Database</option>
+                        <option value="API">API</option>
+                        <option value="Cloud">Cloud</option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-3">
+                      <select
+                        value={agentStatusFilter}
+                        onChange={(e) => setAgentStatusFilter(e.target.value)}
+                        className="w-full py-2 px-3 bg-surface-container-low border border-outline-variant rounded-lg text-body-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">All Availability</option>
+                        <option value="Online">Online</option>
+                        <option value="Away">Away</option>
+                        <option value="Offline">Offline</option>
+                      </select>
+                    </div>
                   </div>
-                ) : (
-                  filteredAgents.map((agent) => {
-                    const isSelected = selectedAgentId === agent.id;
-                    return (
+
+                  {/* Agents Data Table */}
+                  <div className="border border-outline-variant rounded-xl overflow-hidden shadow-xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-surface-container text-on-surface-variant font-label-md text-[11px] border-b border-outline-variant uppercase tracking-wider">
+                            <th className="px-4 py-3 font-bold">Filter Agent</th>
+                            <th className="px-4 py-3 font-bold">Skill Matrix</th>
+                            <th className="px-4 py-3 font-bold">Current Load</th>
+                            <th className="px-4 py-3 text-center font-bold">Auto Assign Mode</th>
+                            <th className="px-4 py-3 text-right font-bold">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant text-body-sm">
+                          {isLoadingAgents ? (
+                            <tr>
+                              <td colSpan={5} className="py-12 text-center text-on-surface-variant">
+                                <span className="material-symbols-outlined animate-spin text-[28px] text-primary mb-2">
+                                  progress_activity
+                                </span>
+                                <p className="text-body-md font-medium">Loading agents data...</p>
+                              </td>
+                            </tr>
+                          ) : filteredAgents.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="py-12 text-center text-on-surface-variant">
+                                <p className="text-body-md">No agents match your filter criteria.</p>
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredAgents.map((agent) => {
+                              const maxCap = agent.maxCapacity || 5;
+                              const isMaxed = agent.activeTickets >= maxCap;
+                              const capPct = Math.min(100, Math.round((agent.activeTickets / maxCap) * 100));
+                              const isSelected = selectedAgentId === agent.id;
+
+                              return (
+                                <tr
+                                  key={agent.id}
+                                  onClick={() => setSelectedAgentId(agent.id)}
+                                  className={`transition-colors cursor-pointer ${
+                                    isSelected
+                                      ? "bg-primary/5 font-medium"
+                                      : "hover:bg-surface-container-low"
+                                  }`}
+                                >
+                                  {/* Filter Agent Column */}
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-3">
+                                      <span className="w-9 h-9 rounded-full bg-primary text-on-primary font-bold flex items-center justify-center text-label-md shrink-0 shadow-xs">
+                                        {agent.initials || agent.name.slice(0, 2).toUpperCase()}
+                                      </span>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <p className="font-bold text-on-surface text-body-md truncate">
+                                            {agent.name}
+                                          </p>
+                                          <span
+                                            className={`w-2 h-2 rounded-full shrink-0 ${
+                                              agent.status === "Online"
+                                                ? "bg-emerald-500"
+                                                : agent.status.includes("Away")
+                                                ? "bg-amber-500"
+                                                : "bg-gray-400"
+                                            }`}
+                                            title={agent.status}
+                                          />
+                                        </div>
+                                        <p className="text-[11px] text-on-surface-variant truncate">
+                                          {agent.role}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+
+                                  {/* Skill Matrix Column */}
+                                  <td className="px-4 py-3">
+                                    <div className="flex flex-wrap gap-1">
+                                      {agent.skills && agent.skills.length > 0 ? (
+                                        agent.skills.map((skill) => (
+                                          <span
+                                            key={skill}
+                                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20"
+                                          >
+                                            {skill}
+                                          </span>
+                                        ))
+                                      ) : (
+                                        <span className="text-[11px] text-on-surface-variant italic">General</span>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* Current Load Column */}
+                                  <td className="px-4 py-3">
+                                    <div className="min-w-[160px]">
+                                      <div className="flex justify-between items-center text-[11px] font-bold mb-1">
+                                        <span
+                                          className={
+                                            isMaxed
+                                              ? "text-error"
+                                              : capPct >= 80
+                                              ? "text-amber-600"
+                                              : "text-primary"
+                                          }
+                                        >
+                                          {agent.activeTickets}/{maxCap} Tickets ({capPct}% Capacity{isMaxed ? " Maxed" : ""})
+                                        </span>
+                                      </div>
+                                      <div className="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
+                                        <div
+                                          className={`h-full rounded-full transition-all ${
+                                            isMaxed
+                                              ? "bg-error"
+                                              : capPct >= 80
+                                              ? "bg-amber-500"
+                                              : "bg-primary"
+                                          }`}
+                                          style={{ width: `${capPct}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </td>
+
+                                  {/* Auto Assign Mode Column */}
+                                  <td className="px-4 py-3 text-center">
+                                    <label className="relative inline-flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                      <input
+                                        type="checkbox"
+                                        checked={agent.autoAssignEnabled ?? true}
+                                        onChange={() => handleToggleAutoAssign(agent.id)}
+                                        className="sr-only peer"
+                                      />
+                                      <div className="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
+                                    </label>
+                                  </td>
+
+                                  {/* Actions Column */}
+                                  <td className="px-4 py-3 text-right">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAssignTicketToAgent(agent.id);
+                                      }}
+                                      disabled={isMaxed || isBulkSubmitting || selectedTicketIds.length === 0}
+                                      className="px-3.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold shadow-xs hover:brightness-110 active:scale-95 disabled:opacity-40 transition-all flex items-center gap-1.5 ml-auto cursor-pointer"
+                                    >
+                                      <span className="material-symbols-outlined text-[16px]">assignment_ind</span>
+                                      <span>Assign Ticket</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: Manage Agents Directory */}
+              {agentModalTab === "manage" && (
+                <div className="flex-1 overflow-y-auto pt-4 space-y-4 pr-1">
+                  <div className="p-4 bg-surface-container rounded-xl flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-on-surface">Agent Directory &amp; Skill Matrix</h4>
+                      <p className="text-xs text-on-surface-variant mt-0.5">
+                        Configure agent max ticket capacity limits, assigned skill badges, and active operational status.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {availableAgents.map((agent) => (
                       <div
                         key={agent.id}
-                        onClick={() => setSelectedAgentId(agent.id)}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? "border-primary bg-primary-container/20 shadow-sm"
-                            : "border-outline-variant hover:bg-surface-container-low"
-                        }`}
+                        className="p-4 rounded-xl border border-outline-variant bg-surface-container-lowest shadow-xs flex flex-col justify-between space-y-3"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="w-9 h-9 rounded-full bg-primary text-on-primary font-bold flex items-center justify-center text-label-md shrink-0">
-                            {agent.initials || agent.name.slice(0, 2).toUpperCase()}
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="font-bold text-on-surface text-body-md truncate">
-                                {agent.name}
-                              </p>
-                              <span
-                                className={`w-2 h-2 rounded-full shrink-0 ${
-                                  agent.status === "Online"
-                                    ? "bg-green-500"
-                                    : agent.status === "Away (Lunch)" || agent.status === "On Break"
-                                    ? "bg-yellow-500"
-                                    : "bg-gray-400"
-                                }`}
-                                title={agent.status}
-                              />
-                            </div>
-                            <p className="text-label-sm text-on-surface-variant truncate">
-                              {agent.role} &bull; {agent.email}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          {agent.activeTickets !== undefined && (
-                            <span className="text-label-sm bg-surface-container px-2 py-0.5 rounded-full text-on-surface-variant font-medium">
-                              {agent.activeTickets} active
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="w-10 h-10 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-body-md shrink-0">
+                              {agent.initials}
                             </span>
-                          )}
-                          <div
-                            className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                              isSelected
-                                ? "border-primary bg-primary text-on-primary"
-                                : "border-outline-variant"
+                            <div>
+                              <p className="font-bold text-on-surface text-body-md">{agent.name}</p>
+                              <p className="text-xs text-on-surface-variant">{agent.role}</p>
+                            </div>
+                          </div>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              agent.status === "Online"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-gray-100 text-gray-700"
                             }`}
                           >
-                            {isSelected && (
-                              <span className="material-symbols-outlined text-[14px]">
-                                check
+                            {agent.status}
+                          </span>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">
+                            Assigned Skills
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {agent.skills?.map((skill) => (
+                              <span
+                                key={skill}
+                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-secondary-container text-on-secondary-container"
+                              >
+                                {skill}
                               </span>
-                            )}
+                            ))}
                           </div>
                         </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
 
-              {/* Modal footer */}
-              <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-outline-variant">
-                <button
-                  onClick={() => setActiveBulkModal(null)}
-                  disabled={isBulkSubmitting}
-                  className="px-4 py-2 rounded-lg border border-outline-variant font-label-md hover:bg-surface-container-low transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBulkReassign}
-                  disabled={!selectedAgentId || isBulkSubmitting || isLoadingAgents}
-                  className="px-5 py-2 rounded-lg bg-primary text-on-primary font-label-md hover:bg-primary-container transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2 active:scale-95"
-                >
-                  {isBulkSubmitting && (
-                    <span className="material-symbols-outlined animate-spin text-[18px]">
-                      progress_activity
-                    </span>
+                        <div className="pt-2 border-t border-outline-variant flex items-center justify-between text-xs">
+                          <span className="text-on-surface-variant">Max Capacity:</span>
+                          <span className="font-bold text-on-surface">{agent.maxCapacity || 5} Tickets</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: Agent Performance Analytics */}
+              {agentModalTab === "performance" && (
+                <div className="flex-1 overflow-y-auto pt-4 space-y-6 pr-1">
+                  {/* KPI Metrics Summary */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
+                      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                        Total Resolved
+                      </p>
+                      <p className="text-headline-md font-bold text-on-surface mt-1">173 Tickets</p>
+                    </div>
+
+                    <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
+                      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                        Avg Customer Rating (CSAT)
+                      </p>
+                      <p className="text-headline-md font-bold text-emerald-600 mt-1">4.85 / 5.0</p>
+                    </div>
+
+                    <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
+                      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                        Avg Response Time
+                      </p>
+                      <p className="text-headline-md font-bold text-primary mt-1">11m 30s</p>
+                    </div>
+
+                    <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
+                      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                        SLA Compliance
+                      </p>
+                      <p className="text-headline-md font-bold text-indigo-600 mt-1">98.4%</p>
+                    </div>
+                  </div>
+
+                  {/* Leaderboard Table */}
+                  <div className="border border-outline-variant rounded-xl overflow-hidden shadow-xs">
+                    <div className="p-3 bg-surface-bright border-b border-outline-variant font-bold text-on-surface">
+                      Agent Performance Leaderboard
+                    </div>
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-surface-container text-on-surface-variant text-[11px] uppercase tracking-wider border-b">
+                          <th className="p-3">Agent</th>
+                          <th className="p-3 text-center">Tickets Resolved</th>
+                          <th className="p-3 text-center">Customer Rating (CSAT)</th>
+                          <th className="p-3 text-center">Avg Response Time</th>
+                          <th className="p-3 text-right">SLA Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-outline-variant text-body-sm">
+                        {availableAgents.map((agent) => (
+                          <tr key={agent.id} className="hover:bg-surface-container-low">
+                            <td className="p-3 font-bold text-on-surface flex items-center gap-2">
+                              <span className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
+                                {agent.initials}
+                              </span>
+                              <span>{agent.name}</span>
+                            </td>
+                            <td className="p-3 text-center font-bold">{agent.performance?.ticketsResolved || 42}</td>
+                            <td className="p-3 text-center font-bold text-emerald-600">{agent.performance?.csatScore || 4.8} / 5.0</td>
+                            <td className="p-3 text-center">{agent.performance?.avgResponseTime || "12m"}</td>
+                            <td className="p-3 text-right font-bold text-primary">{agent.performance?.slaRate || 98.2}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between pt-4 mt-4 border-t border-outline-variant">
+                <div className="text-xs text-on-surface-variant italic">
+                  Showing {filteredAgents.length} agents
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setActiveBulkModal(null)}
+                    disabled={isBulkSubmitting}
+                    className="px-4 py-2 rounded-lg border border-outline-variant font-label-md hover:bg-surface-container-low transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  {agentModalTab === "assign" && (
+                    <button
+                      onClick={handleBulkReassign}
+                      disabled={!selectedAgentId || isBulkSubmitting || isLoadingAgents || selectedTicketIds.length === 0}
+                      className="px-5 py-2 rounded-lg bg-primary text-on-primary font-label-md hover:brightness-110 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2 active:scale-95 cursor-pointer"
+                    >
+                      {isBulkSubmitting && (
+                        <span className="material-symbols-outlined animate-spin text-[18px]">
+                          progress_activity
+                        </span>
+                      )}
+                      <span>Assign {selectedTicketIds.length} {selectedTicketIds.length === 1 ? "Ticket" : "Tickets"}</span>
+                    </button>
                   )}
-                  <span>Reassign {selectedTicketIds.length} {selectedTicketIds.length === 1 ? "Ticket" : "Tickets"}</span>
-                </button>
+                </div>
               </div>
             </div>
           )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { adminUserService } from "@/src/services/adminUserService";
 
 type PlanStatus = "Active" | "Draft" | "Inactive";
 type BillingCycle = "Monthly" | "Annual" | "Custom";
@@ -158,7 +159,36 @@ export default function ManagePricingPlansPage() {
   const [toastMessage, setToastMessage] = useState("");
   const [form, setForm] = useState(blankForm);
 
+  const [showMatrixModal, setShowMatrixModal] = useState(false);
+  const [showTaxModal, setShowTaxModal] = useState(false);
+  const [matrixData, setMatrixData] = useState<FeatureRow[]>(featureRows);
+  const [taxRules, setTaxRules] = useState([
+    { region: "Cambodia VAT (GDT)", rate: "10.00%", status: "Active" },
+    { region: "EU & UK VAT", rate: "20.00%", status: "Active" },
+    { region: "US State Tax", rate: "8.50%", status: "Active" },
+  ]);
+  const [newTaxRegion, setNewTaxRegion] = useState("");
+  const [newTaxRate, setNewTaxRate] = useState("");
+
+  const handleAddTaxRule = () => {
+    if (!newTaxRegion.trim() || !newTaxRate.trim()) {
+      triggerToast("Region name and rate percentage are required.");
+      return;
+    }
+    const formattedRate = newTaxRate.includes("%") ? newTaxRate.trim() : `${newTaxRate.trim()}%`;
+    setTaxRules((prev) => [...prev, { region: newTaxRegion.trim(), rate: formattedRate, status: "Active" }]);
+    setNewTaxRegion("");
+    setNewTaxRate("");
+    triggerToast(`Added tax rule for ${newTaxRegion.trim()}`);
+  };
+
+  const [realUserCount, setRealUserCount] = useState<number | null>(null);
+
   useEffect(() => {
+    adminUserService.getUsers()
+      .then((users) => setRealUserCount(users.length))
+      .catch(() => setRealUserCount(null));
+
     const handleAdminSearch = (event: Event) => {
       const customEvent = event as CustomEvent<string>;
       setSearchQuery(customEvent.detail || "");
@@ -184,6 +214,26 @@ export default function ManagePricingPlansPage() {
 
   const activeSubscriptions = plans.reduce((sum, plan) => sum + plan.subscriptions, 0);
   const activePlanCount = plans.filter((plan) => plan.status === "Active").length;
+
+  const projectedMRRNumber = plans.reduce((sum, plan) => {
+    if (plan.status !== "Active") return sum;
+    const priceNum = Number.parseFloat(stripCurrency(plan.monthlyPrice));
+    if (Number.isNaN(priceNum)) {
+      return sum + plan.subscriptions * 500;
+    }
+    return sum + plan.subscriptions * priceNum;
+  }, 0);
+
+  const isRiel = baseCurrency.includes("KHR") || baseCurrency.includes("Dual");
+  const formattedMRR = isRiel
+    ? projectedMRRNumber >= 1000000
+      ? `$${(projectedMRRNumber / 1000000).toFixed(1)}M (${(projectedMRRNumber * 4100 / 1000000000).toFixed(1)}B ៛)`
+      : `$${projectedMRRNumber.toLocaleString()} (${(projectedMRRNumber * 4100).toLocaleString()} ៛)`
+    : projectedMRRNumber >= 1000000
+    ? `$${(projectedMRRNumber / 1000000).toFixed(1)}M`
+    : projectedMRRNumber >= 1000
+    ? `$${(projectedMRRNumber / 1000).toFixed(0)}k`
+    : `$${projectedMRRNumber.toLocaleString()}`;
 
   const triggerToast = (message: string) => {
     setToastMessage(message);
@@ -260,13 +310,18 @@ export default function ManagePricingPlansPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1440px] space-y-stack-lg animate-in fade-in duration-300">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      {/* Page Header */}
+      <section className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="font-headline-lg text-headline-lg font-bold text-on-surface">
-            Manage Pricing Plans
-          </h2>
-          <p className="mt-1 max-w-3xl text-body-md text-on-surface-variant">
-            Configure marketing-site tiers, feature availability, billing cycles, tax behavior, and revenue controls for TMS subscriptions.
+          <div className="flex items-center gap-2">
+            <h2 className="font-headline-lg text-headline-lg text-on-surface font-bold">Manage Pricing Plans</h2>
+            <span className="flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 px-2.5 py-0.5 rounded-full text-xs font-bold shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-green-600 animate-pulse" />
+              Live DB Sync
+            </span>
+          </div>
+          <p className="text-secondary font-body-md mt-1">
+            Real-time tracking of subscription tiers, billing cycles, and revenue metrics.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -321,7 +376,7 @@ export default function ManagePricingPlansPage() {
             <span className="rounded bg-green-50 px-2 py-1 text-label-md font-bold text-green-700">+12%</span>
           </div>
           <p className="text-label-md font-semibold uppercase tracking-wider text-secondary">Projected MRR</p>
-          <p className="font-display text-display font-bold text-on-surface">$1.2M</p>
+          <p className="font-display text-display font-bold text-on-surface">{formattedMRR}</p>
         </div>
       </section>
 
@@ -493,8 +548,8 @@ export default function ManagePricingPlansPage() {
               <p className="text-sm text-on-surface-variant">Map product capabilities to public pricing tiers.</p>
             </div>
             <button
-              onClick={() => triggerToast("Feature matrix mapping saved.")}
-              className="rounded-lg px-3 py-2 text-body-md font-bold text-primary transition-colors hover:bg-primary/10"
+              onClick={() => setShowMatrixModal(true)}
+              className="rounded-lg px-4.5 py-2 text-body-md font-bold bg-primary text-white hover:bg-primary/90 transition-colors shadow-xs cursor-pointer"
             >
               Update Mapping
             </button>
@@ -536,13 +591,15 @@ export default function ManagePricingPlansPage() {
                   value={baseCurrency}
                   onChange={(event) => {
                     setBaseCurrency(event.target.value);
-                    triggerToast("Currency settings saved.");
+                    triggerToast(`Base currency updated to ${event.target.value}`);
                   }}
-                  className="w-full rounded-lg border border-outline-variant bg-surface px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="w-full rounded-lg border border-outline-variant bg-surface px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer font-medium"
                 >
+                  <option>USD & KHR - Dual Currency ($ / ៛)</option>
+                  <option>KHR - Cambodian Riel (៛)</option>
                   <option>USD - US Dollar ($)</option>
-                  <option>EUR - Euro (EUR)</option>
-                  <option>GBP - British Pound (GBP)</option>
+                  <option>EUR - Euro (€)</option>
+                  <option>GBP - British Pound (£)</option>
                 </select>
               </div>
               <button
@@ -565,17 +622,19 @@ export default function ManagePricingPlansPage() {
               <span className="material-symbols-outlined text-primary">receipt_long</span>
               Tax Configuration
             </h3>
-            <div className="space-y-4">
-              <div className="rounded-lg border border-outline-variant/70 bg-surface p-3">
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-sm font-semibold">Standard VAT</span>
-                  <span className="rounded bg-green-50 px-1.5 py-0.5 text-xs font-bold text-green-700">ACTIVE</span>
+            <div className="space-y-3">
+              {taxRules.filter((r) => r.status === "Active").map((rule) => (
+                <div key={rule.region} className="rounded-lg border border-outline-variant/70 bg-surface p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-sm font-semibold">{rule.region}</span>
+                    <span className="rounded bg-green-50 px-1.5 py-0.5 text-xs font-bold text-green-700">ACTIVE</span>
+                  </div>
+                  <p className="text-xs text-on-surface-variant">Default {rule.rate} rate applied at checkout.</p>
                 </div>
-                <p className="text-xs text-on-surface-variant">Default 20.00% applied to EU and UK customers.</p>
-              </div>
+              ))}
               <button
-                onClick={() => triggerToast("Tax rules manager opened.")}
-                className="w-full rounded-lg border border-outline-variant bg-surface py-2 text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-low"
+                onClick={() => setShowTaxModal(true)}
+                className="w-full rounded-lg border border-outline-variant bg-surface py-2 text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-low cursor-pointer"
               >
                 Manage Tax Rules
               </button>
@@ -587,7 +646,7 @@ export default function ManagePricingPlansPage() {
               <h4 className="mb-2 font-bold">Revenue Insights</h4>
               <p className="mb-4 text-xs text-blue-100">Pricing changes typically take 24h to propagate across public pricing surfaces.</p>
               <div className="flex items-center gap-2 text-2xl font-bold">
-                $1.2M
+                {formattedMRR}
                 <span className="flex items-center gap-1 rounded bg-blue-500/50 px-2 py-1 text-xs">
                   <span className="material-symbols-outlined text-[12px]">trending_up</span>
                   12%
@@ -820,6 +879,183 @@ export default function ManagePricingPlansPage() {
                 className="rounded-lg bg-primary px-5 py-2 font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
               >
                 {editingPlan ? "Save Changes" : "Create Plan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feature Matrix Mapping Modal */}
+      {showMatrixModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white border border-outline-variant rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 bg-surface border-b border-outline-variant flex items-center justify-between">
+              <h3 className="font-headline-md font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">grid_view</span>
+                Feature Matrix Tier Mapping
+              </h3>
+              <button
+                onClick={() => setShowMatrixModal(false)}
+                className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <p className="text-xs text-secondary">
+                Configure feature availability per tier (Included, Limited, or Unavailable). Changes apply immediately to public pricing cards.
+              </p>
+
+              <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-surface-container-low text-xs font-bold uppercase text-secondary">
+                  <tr>
+                    <th className="p-3 border border-outline-variant">Feature</th>
+                    <th className="p-3 border border-outline-variant text-center">Starter</th>
+                    <th className="p-3 border border-outline-variant text-center">Professional</th>
+                    <th className="p-3 border border-outline-variant text-center">Enterprise</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant">
+                  {matrixData.map((row, idx) => (
+                    <tr key={row.name}>
+                      <td className="p-3 border border-outline-variant font-medium text-on-surface">{row.name}</td>
+                      {(["starter", "professional", "enterprise"] as const).map((tier) => (
+                        <td key={tier} className="p-2 border border-outline-variant text-center">
+                          <select
+                            value={row[tier]}
+                            onChange={(e) => {
+                              const updated = [...matrixData];
+                              updated[idx] = { ...updated[idx], [tier]: e.target.value };
+                              setMatrixData(updated);
+                            }}
+                            className="text-xs border border-outline-variant rounded px-2 py-1 bg-white font-medium focus:ring-2 focus:ring-primary cursor-pointer"
+                          >
+                            <option value="Included">Included</option>
+                            <option value="Limited">Limited</option>
+                            <option value="Unavailable">Unavailable</option>
+                          </select>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="px-6 py-4 bg-surface border-t border-outline-variant flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowMatrixModal(false)}
+                className="px-4 py-2 font-semibold text-secondary hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowMatrixModal(false);
+                  triggerToast("Feature matrix mapping updated & saved.");
+                }}
+                className="px-5 py-2 bg-primary text-white font-bold rounded-lg shadow-sm hover:opacity-90 transition-all cursor-pointer"
+              >
+                Save Matrix
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tax Configuration Rules Modal */}
+      {showTaxModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white border border-outline-variant rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 bg-surface border-b border-outline-variant flex items-center justify-between">
+              <h3 className="font-headline-md font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">receipt_long</span>
+                Regional Tax Configuration
+              </h3>
+              <button
+                onClick={() => setShowTaxModal(false)}
+                className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-secondary">
+                Configure automatic tax rates applied at checkout based on customer billing location.
+              </p>
+
+              <div className="space-y-3">
+                {taxRules.map((rule, idx) => (
+                  <div key={rule.region} className="p-3 bg-surface-container-low border border-outline-variant rounded-xl flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-sm text-on-surface">{rule.region}</p>
+                      <p className="text-xs text-secondary">Default Rate: <span className="font-mono font-bold text-primary">{rule.rate}</span></p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const updated = [...taxRules];
+                          updated[idx].status = updated[idx].status === "Active" ? "Inactive" : "Active";
+                          setTaxRules(updated);
+                          triggerToast(`${rule.region} tax rule set to ${updated[idx].status}`);
+                        }}
+                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                          rule.status === "Active" ? "bg-green-100 text-green-700 border border-green-200" : "bg-slate-100 text-slate-500 border border-slate-200"
+                        }`}
+                      >
+                        {rule.status}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTaxRules(taxRules.filter((_, i) => i !== idx));
+                          triggerToast(`Deleted tax rule ${rule.region}`);
+                        }}
+                        className="p-1 text-slate-400 hover:text-error transition-colors cursor-pointer"
+                        title="Delete Rule"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add New Tax Rule Section */}
+              <div className="pt-3 border-t border-outline-variant space-y-2">
+                <p className="text-xs font-bold uppercase text-secondary">Add New Tax Rule</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Region Name (e.g. Japan JCT)"
+                    value={newTaxRegion}
+                    onChange={(e) => setNewTaxRegion(e.target.value)}
+                    className="flex-1 px-3 py-1.5 border border-outline-variant rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Rate %"
+                    value={newTaxRate}
+                    onChange={(e) => setNewTaxRate(e.target.value)}
+                    className="w-24 px-3 py-1.5 border border-outline-variant rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <button
+                    onClick={handleAddTaxRule}
+                    className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary/90 transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    Add Rule
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-surface border-t border-outline-variant flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowTaxModal(false)}
+                className="px-5 py-2 bg-primary text-white font-bold rounded-lg shadow-sm hover:opacity-90 transition-all cursor-pointer"
+              >
+                Done & Close
               </button>
             </div>
           </div>

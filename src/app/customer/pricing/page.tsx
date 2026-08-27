@@ -50,9 +50,17 @@ function Minus() {
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function PricingPage() {
   const [isAnnual, setIsAnnual] = useState(true);
+  const [currency, setCurrency] = useState<"USD" | "KHR">("USD");
 
   const starterPrice = isAnnual ? 29 : 36;
   const proPrice = isAnnual ? 79 : 99;
+
+  const formatPrice = (usdAmount: number) => {
+    if (currency === "KHR") {
+      return `${(usdAmount * 4100).toLocaleString()} ៛`;
+    }
+    return `$${usdAmount}`;
+  };
 
   const faqs = [
     {
@@ -92,27 +100,49 @@ export default function PricingPage() {
             Choose the plan that fits your growth trajectory.
           </p>
 
-          {/* Billing Toggle */}
-          <div className="flex items-center justify-center gap-4 mb-stack-lg">
-            <span className="font-label-md text-label-md text-on-surface">Monthly</span>
-            <button
-              type="button"
-              onClick={() => setIsAnnual(!isAnnual)}
-              className={`relative w-14 h-8 rounded-full p-1 transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
-                isAnnual ? "bg-primary" : "bg-surface-container-high"
-              }`}
-              aria-label="Toggle billing period"
-            >
-              <div
-                className={`w-6 h-6 bg-white rounded-full shadow-sm transform transition-transform duration-200 ${
-                  isAnnual ? "translate-x-6" : "translate-x-0"
+          {/* Billing Toggle & Currency Switcher */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-stack-lg">
+            <div className="flex items-center gap-4">
+              <span className="font-label-md text-label-md text-on-surface">Monthly</span>
+              <button
+                type="button"
+                onClick={() => setIsAnnual(!isAnnual)}
+                className={`relative w-14 h-8 rounded-full p-1 transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
+                  isAnnual ? "bg-primary" : "bg-surface-container-high"
                 }`}
-              />
-            </button>
-            <span className="font-label-md text-label-md text-on-surface">Annual</span>
-            <span className="bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
-              20% OFF
-            </span>
+                aria-label="Toggle billing period"
+              >
+                <div
+                  className={`w-6 h-6 bg-white rounded-full shadow-sm transform transition-transform duration-200 ${
+                    isAnnual ? "translate-x-6" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <span className="font-label-md text-label-md text-on-surface">Annual</span>
+              <span className="bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
+                20% OFF
+              </span>
+            </div>
+
+            {/* Currency Selector */}
+            <div className="flex items-center gap-1 bg-surface-container p-1 rounded-lg border border-outline-variant">
+              <button
+                onClick={() => setCurrency("USD")}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                  currency === "USD" ? "bg-white text-primary shadow-xs" : "text-on-surface-variant hover:text-on-surface"
+                }`}
+              >
+                USD ($)
+              </button>
+              <button
+                onClick={() => setCurrency("KHR")}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                  currency === "KHR" ? "bg-white text-primary shadow-xs" : "text-on-surface-variant hover:text-on-surface"
+                }`}
+              >
+                KHR (៛ Riel)
+              </button>
+            </div>
           </div>
         </section>
 
@@ -128,8 +158,8 @@ export default function PricingPage() {
             </div>
             <div className="mb-8">
               <div className="flex items-baseline gap-1">
-                <span className="font-display text-display text-on-surface">${starterPrice}</span>
-                <span className="text-on-surface-variant">/agent/mo</span>
+                <span className="font-display text-display text-on-surface">{formatPrice(starterPrice)}</span>
+                <span className="text-on-surface-variant text-sm">/agent/mo</span>
               </div>
               <p className="text-on-surface-variant text-sm mt-1">
                 {isAnnual ? "Billed annually" : "Billed monthly"}
@@ -164,8 +194,8 @@ export default function PricingPage() {
             </div>
             <div className="mb-8">
               <div className="flex items-baseline gap-1">
-                <span className="font-display text-display text-on-surface">${proPrice}</span>
-                <span className="text-on-surface-variant">/agent/mo</span>
+                <span className="font-display text-display text-on-surface">{formatPrice(proPrice)}</span>
+                <span className="text-on-surface-variant text-sm">/agent/mo</span>
               </div>
               <p className="text-on-surface-variant text-sm mt-1">
                 {isAnnual ? "Billed annually" : "Billed monthly"}

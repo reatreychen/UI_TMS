@@ -114,20 +114,10 @@ export function AgentTopNav() {
                 <span className="material-symbols-outlined text-[18px]">person</span>
                 Profile Settings
               </button>
-              <button
-                onClick={() => {
-                  setShowProfileMenu(false);
-                  router.push("/admin/audit-logs");
-                }}
-                className="w-full text-left px-3 py-2 text-body-md text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[18px]">security</span>
-                Security Log
-              </button>
               <div className="my-1 border-t border-outline-variant" />
               <button
                 onClick={handleLogout}
-                className="w-full text-left px-3 py-2 text-body-md text-error hover:bg-error-container/20 rounded-lg transition-colors flex items-center gap-2"
+                className="w-full text-left px-3 py-2 text-body-md text-error hover:bg-error-container/20 rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
                 Log Out

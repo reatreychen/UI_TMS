@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import { TopNav } from "@/src/components/portal/TopNav";
 import { PortalFooter } from "@/src/components/portal/PortalFooter";
 import { useParams } from "next/navigation";
@@ -11,6 +12,8 @@ import {
   fetchTicket,
   fetchTicketComments,
   createTicketComment,
+  updateTicketStatus,
+  uploadTicketAttachment,
   TicketComment,
 } from "@/src/services/portalService";
 import { formatDistanceToNow, format } from "date-fns";
@@ -49,19 +52,124 @@ interface CustomerTicket {
 export default function TicketDetailPage() {
   const { id } = useParams() as { id: string };
   const currentUser = useAppSelector(selectUser);
-
   const [ticket, setTicket] = useState<CustomerTicket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reply, setReply] = useState("");
   const [sent, setSent] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [uploadStatusMsg, setUploadStatusMsg] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isFirstLoadRef = useRef(true);
   const userScrolledUpRef = useRef(false);
+  const prevMessagesJsonRef = useRef<string>("");
+  const previousMessageCountRef = useRef(0);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const insertFormatting = (prefix: string, suffix: string = "", defaultText: string = "") => {
+    const textarea = textareaRef.current;
+    const currentReply = reply;
+
+    let start = currentReply.length;
+    let end = currentReply.length;
+
+    if (textarea) {
+      start = textarea.selectionStart ?? currentReply.length;
+      end = textarea.selectionEnd ?? currentReply.length;
+    }
+
+    const selected = currentReply.substring(start, end);
+    const textToInsert = selected.length > 0 ? selected : defaultText;
+    const replacement = `${prefix}${textToInsert}${suffix}`;
+    const newText = currentReply.substring(0, start) + replacement + currentReply.substring(end);
+
+    setReply(newText);
+
+    requestAnimationFrame(() => {
+      if (textarea) {
+        textarea.focus();
+        if (selected.length > 0) {
+          textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+        } else {
+          const newCursorPos = start + prefix.length + textToInsert.length + suffix.length;
+          textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }
+      }
+    });
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, isImgOnly = false) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !currentUser?.id) return;
+    const file = files[0];
+
+    setIsUploadingFile(true);
+    setUploadStatusMsg(`Uploading ${file.name}...`);
+    try {
+      await uploadTicketAttachment(id, currentUser.id, file);
+      setUploadStatusMsg(`Attached ${file.name}`);
+      toast.success(`Attached ${file.name}`);
+      setTimeout(() => setUploadStatusMsg(null), 3500);
+
+      const attachmentMarkdown = isImgOnly
+        ? `\n![${file.name}](Image: ${file.name})\n`
+        : `\n[📎 ${file.name}]\n`;
+      setReply((prev) => prev + attachmentMarkdown);
+
+      void loadTicketData();
+    } catch (err) {
+      console.error("Failed to upload attachment", err);
+      toast.error("Failed to upload attachment. Please try again.");
+      setUploadStatusMsg(null);
+    } finally {
+      setIsUploadingFile(false);
+      e.target.value = "";
+    }
+  };
+
+  const toolbarActions: Record<string, { label: string; action: () => void }> = {
+    format_bold: {
+      label: "Bold",
+      action: () => insertFormatting("**", "**", "bold text"),
+    },
+    format_italic: {
+      label: "Italic",
+      action: () => insertFormatting("*", "*", "italic text"),
+    },
+    format_list_bulleted: {
+      label: "Bulleted List",
+      action: () => insertFormatting("\n- ", "", "list item"),
+    },
+    link: {
+      label: "Insert Link",
+      action: () => insertFormatting("[", "](https://example.com)", "link title"),
+    },
+    attach_file: {
+      label: "Attach File",
+      action: () => fileInputRef.current?.click(),
+    },
+    image: {
+      label: "Insert Image",
+      action: () => imageInputRef.current?.click(),
+    },
+  };
 
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
@@ -100,7 +208,11 @@ export default function TicketDetailPage() {
         time: format(new Date(ticketData.createdAt), "h:mm a"),
       });
 
-      setMessages(msgs);
+      const jsonSignature = JSON.stringify(msgs.map(m => m.id + (m.text || "")));
+      if (jsonSignature !== prevMessagesJsonRef.current) {
+        prevMessagesJsonRef.current = jsonSignature;
+        setMessages(msgs);
+      }
     } catch (error) {
       console.error("Failed to fetch ticket data", error);
     } finally {
@@ -130,8 +242,10 @@ export default function TicketDetailPage() {
     if (isFirstLoadRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "auto" });
       isFirstLoadRef.current = false;
-    } else if (!userScrolledUpRef.current) {
+      previousMessageCountRef.current = messages.length;
+    } else if (messages.length > previousMessageCountRef.current && !userScrolledUpRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      previousMessageCountRef.current = messages.length;
     }
   }, [messages]);
 
@@ -148,6 +262,7 @@ export default function TicketDetailPage() {
       });
       setReply("");
       setSent(true);
+      toast.success("Message sent successfully!");
       setTimeout(() => setSent(false), 2500);
 
       // Show the sent message immediately. The next poll reconciles it with
@@ -239,6 +354,23 @@ export default function TicketDetailPage() {
               </h1>
             </div>
             <div className="flex gap-2">
+              {ticket.status !== "RESOLVED" && ticket.status !== "CLOSED" && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await updateTicketStatus(id, "RESOLVED");
+                      void loadTicketData(true);
+                    } catch (err) {
+                      console.error("Failed to resolve ticket", err);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-on-primary rounded-lg font-body-md font-semibold hover:bg-surface-tint active:scale-95 transition-all cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                  Mark as Resolved
+                </button>
+              )}
               <Link
                 href="/customer/my-ticket"
                 className="flex items-center gap-2 px-4 py-2 border border-outline-variant rounded-lg font-body-md font-medium hover:bg-surface-container-low transition-colors"
@@ -253,7 +385,7 @@ export default function TicketDetailPage() {
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
-            className="flex-1 space-y-stack-md overflow-y-auto custom-scrollbar pr-1 min-h-[400px] border border-outline-variant bg-surface-container-lowest rounded-xl p-6 shadow-sm"
+            className="flex-1 space-y-stack-md overflow-y-auto custom-scrollbar pr-1 min-h-[350px] max-h-[550px] border border-outline-variant bg-surface-container-lowest rounded-xl p-6 shadow-sm"
           >
             {messages.map((msg, i) => {
               if (msg.type === "event") {
@@ -298,48 +430,174 @@ export default function TicketDetailPage() {
           </div>
 
           {/* Reply Editor */}
-          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-md mt-4">
-            <div className="flex items-center gap-1 p-2 border-b border-outline-variant bg-surface-container-low">
-              {["format_bold", "format_italic", "format_list_bulleted", "link", "attach_file", "image"].map((icon) => (
-                <button
-                  key={icon}
-                  type="button"
-                  className="material-symbols-outlined p-1.5 hover:bg-surface-container-high rounded text-on-surface-variant transition-colors"
-                >
-                  {icon}
-                </button>
-              ))}
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl overflow-hidden shadow-sm mt-4">
+            {/* Hidden File Inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={(e) => void handleFileSelect(e, false)}
+              className="hidden"
+            />
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => void handleFileSelect(e, true)}
+              className="hidden"
+            />
+
+            {/* Top Toolbar (Formatting) */}
+            <div className="flex items-center gap-1.5 p-2 px-3 border-b border-outline-variant bg-surface-container-low/50 text-on-surface-variant font-medium text-sm">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertFormatting("**", "**", "bold text")}
+                title="Bold"
+                className="px-2 py-0.5 hover:bg-surface-container-high rounded font-bold font-serif hover:text-on-surface transition-colors cursor-pointer"
+              >
+                B
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertFormatting("*", "*", "italic text")}
+                title="Italic"
+                className="px-2 py-0.5 hover:bg-surface-container-high rounded italic font-serif hover:text-on-surface transition-colors cursor-pointer"
+              >
+                I
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertFormatting("[", "](https://example.com)", "link title")}
+                title="Insert Link"
+                className="p-1 hover:bg-surface-container-high rounded hover:text-on-surface transition-colors cursor-pointer flex items-center"
+              >
+                <span className="material-symbols-outlined text-[18px]">link</span>
+              </button>
+
+              <div className="h-4 w-px bg-outline-variant mx-1" />
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertFormatting("\n- ", "", "list item")}
+                title="Bulleted List"
+                className="p-1 hover:bg-surface-container-high rounded hover:text-on-surface transition-colors cursor-pointer flex items-center"
+              >
+                <span className="material-symbols-outlined text-[18px]">format_list_bulleted</span>
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertFormatting("`", "`", "code")}
+                title="Inline Code"
+                className="px-1.5 py-0.5 hover:bg-surface-container-high rounded font-mono text-xs hover:text-on-surface transition-colors cursor-pointer"
+              >
+                &lt;&gt;
+              </button>
+
+              {uploadStatusMsg && (
+                <span className="text-xs text-primary font-bold ml-auto flex items-center gap-1 animate-pulse">
+                  {isUploadingFile && <Loader2 className="size-3 animate-spin" />}
+                  {uploadStatusMsg}
+                </span>
+              )}
             </div>
+
+            {/* Textarea */}
             <textarea
               ref={textareaRef}
               value={reply}
               onChange={(e) => setReply(e.target.value)}
               onKeyDown={handleKeyDown}
-              rows={2}
-              placeholder="Type your reply here... (Press Ctrl + Enter to send)"
-              className="w-full px-4 py-2.5 min-h-[64px] focus:outline-none resize-none font-body-md text-body-md placeholder:text-outline bg-transparent"
+              rows={3}
+              placeholder="Type your reply here... (Ctrl + Enter to send)"
+              className="w-full px-4 py-3 min-h-[85px] focus:outline-none resize-none font-body-md text-body-md placeholder:text-outline bg-transparent"
             />
-            <div className="p-3 border-t border-outline-variant flex justify-between items-center bg-surface-container-lowest">
-              <span className="text-label-md text-on-surface-variant">
-                {sent ? (
-                  <span className="text-green-600 flex items-center gap-1">
+
+            {/* Bottom Bar / Action Footer */}
+            <div className="p-3 px-4 border-t border-outline-variant flex justify-between items-center bg-surface-container-lowest relative">
+              <div className="flex items-center gap-2 relative" ref={emojiRef}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingFile}
+                  title="Attach File"
+                  className="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[20px]">attach_file</span>
+                </button>
+
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setShowEmojiPicker((prev) => !prev)}
+                  title="Insert Emoji"
+                  className="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-amber-500 transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[20px]">sentiment_satisfied</span>
+                </button>
+
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => insertFormatting("@support ", "", "")}
+                  title="Mention Support"
+                  className="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[20px]">alternate_email</span>
+                </button>
+
+                {/* Floating Emoji Picker */}
+                {showEmojiPicker && (
+                  <div className="absolute bottom-12 left-0 z-30 bg-surface-container-lowest border border-outline-variant rounded-2xl p-3 shadow-2xl grid grid-cols-6 gap-2 text-xl animate-in fade-in zoom-in-95 duration-150 w-64">
+                    {["😊", "👍", "🎉", "🙏", "🚀", "❤️", "💡", "🐛", "💬", "⚡", "✅", "⭐"].map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          insertFormatting(emoji, "", "");
+                          setShowEmojiPicker(false);
+                        }}
+                        className="p-2 hover:bg-surface-container-high rounded-xl transition-transform hover:scale-125 text-center cursor-pointer"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                {sent && (
+                  <span className="text-xs font-semibold text-green-600 flex items-center gap-1 animate-in fade-in duration-200">
                     <span className="material-symbols-outlined text-[16px]">check_circle</span>
                     Message sent!
                   </span>
-                ) : (
-                  "Press Ctrl + Enter to send"
                 )}
-              </span>
-              <button
-                type="button"
-                onClick={handleSend}
-                disabled={!reply.trim() || isSending}
-                className="bg-primary text-on-primary px-6 py-2 rounded-lg font-body-md font-semibold hover:bg-surface-tint active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {isSending ? <Loader2 className="size-4 animate-spin" /> : null}
-                {isSending ? "Sending..." : "Send Message"}
-                {!isSending && <span className="material-symbols-outlined text-[18px]">send</span>}
-              </button>
+
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={!reply.trim() || isSending}
+                  className="bg-primary text-on-primary px-6 py-2 rounded-xl font-body-md font-bold hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm cursor-pointer"
+                >
+                  {isSending ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Send Message</span>
+                      <span className="material-symbols-outlined text-[18px]">send</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

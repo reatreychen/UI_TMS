@@ -5,6 +5,7 @@ import {
   adminDepartmentService,
   Department,
 } from "@/src/services/adminDepartmentService";
+import { adminCategoryService, Category as SystemCategory } from "@/src/services/adminCategoryService";
 import { Plus, Search, Edit2, Trash2, Building2, Layers, Users, RefreshCw, AlertCircle, CheckCircle2, X } from "lucide-react";
 
 function getErrorMessage(error: unknown): string {
@@ -24,13 +25,20 @@ export default function DepartmentManagementPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   
+  const [allCategories, setAllCategories] = useState<SystemCategory[]>([]);
+
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [deletingDepartment, setDeletingDepartment] = useState<Department | null>(null);
 
   // Form states
-  const [formData, setFormData] = useState({ name: "", description: "" });
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    selectedCategoryIds: [] as string[],
+    newCategoryName: "",
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Toast notification state
@@ -54,8 +62,20 @@ export default function DepartmentManagementPage() {
     }
   };
 
+  const fetchAllCategories = async () => {
+    try {
+      const res = await adminCategoryService.getCategories({ limit: 100 });
+      if (res?.data) {
+        setAllCategories(res.data);
+      }
+    } catch (err) {
+      console.warn("Failed to load category list:", err);
+    }
+  };
+
   useEffect(() => {
     fetchDepartments();
+    fetchAllCategories();
   }, []);
 
   // Filtered departments
@@ -69,14 +89,25 @@ export default function DepartmentManagementPage() {
 
   // Open modal for Create
   const handleOpenCreateModal = () => {
-    setFormData({ name: "", description: "" });
+    setFormData({
+      name: "",
+      description: "",
+      selectedCategoryIds: [],
+      newCategoryName: "",
+    });
     setShowCreateModal(true);
   };
 
   // Open modal for Edit
   const handleOpenEditModal = (dept: Department) => {
     setEditingDepartment(dept);
-    setFormData({ name: dept.name, description: dept.description || "" });
+    const existingCatIds = dept.categories ? dept.categories.map((c: any) => c.id).filter(Boolean) : [];
+    setFormData({
+      name: dept.name,
+      description: dept.description || "",
+      selectedCategoryIds: existingCatIds,
+      newCategoryName: "",
+    });
   };
 
   // Create or Update Submission
@@ -86,14 +117,13 @@ export default function DepartmentManagementPage() {
 
     setIsSubmitting(true);
     try {
+      let targetDeptId = "";
       if (editingDepartment) {
         const updated = await adminDepartmentService.updateDepartment(editingDepartment.id, {
           name: formData.name.trim(),
           description: formData.description.trim() || undefined,
         });
-        setDepartments((prev) =>
-          prev.map((d) => (d.id === editingDepartment.id ? updated : d))
-        );
+        targetDeptId = updated.id;
         showToastNotification(`Department "${updated.name}" updated successfully!`);
         setEditingDepartment(null);
       } else {
@@ -101,9 +131,31 @@ export default function DepartmentManagementPage() {
           name: formData.name.trim(),
           description: formData.description.trim() || undefined,
         });
-        setDepartments((prev) => [created, ...prev]);
+        targetDeptId = created.id;
         showToastNotification(`Department "${created.name}" created successfully!`);
         setShowCreateModal(false);
+      }
+
+      if (targetDeptId) {
+        for (const catId of formData.selectedCategoryIds) {
+          try {
+            await adminCategoryService.updateCategory(catId, { department_id: targetDeptId });
+          } catch (cErr) {
+            console.warn("Failed to assign category", catId, cErr);
+          }
+        }
+        if (formData.newCategoryName.trim()) {
+          try {
+            await adminCategoryService.createCategory({
+              name: formData.newCategoryName.trim(),
+              department_id: targetDeptId,
+            });
+          } catch (cErr) {
+            console.warn("Failed to create new category", cErr);
+          }
+        }
+        await fetchDepartments();
+        await fetchAllCategories();
       }
     } catch (err) {
       showToastNotification(getErrorMessage(err), "error");
@@ -315,10 +367,23 @@ export default function DepartmentManagementPage() {
                     </td>
 
                     <td className="py-4 px-6 text-center">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-body-xs font-semibold bg-secondary-container text-on-secondary-container">
-                        <Layers className="w-3.5 h-3.5" />
-                        {dept.categories?.length || 0}
-                      </span>
+                      <div className="flex flex-wrap items-center justify-center gap-1.5">
+                        {dept.categories && dept.categories.length > 0 ? (
+                          dept.categories.map((cat: any) => (
+                            <span
+                              key={cat.id || cat.name}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20"
+                            >
+                              <Layers className="w-3 h-3" />
+                              {cat.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-body-xs font-medium bg-surface-container-high text-secondary">
+                            No categories assigned
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     <td className="py-4 px-6 text-right">
@@ -393,6 +458,59 @@ export default function DepartmentManagementPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-on-surface placeholder:text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-body-md transition-all resize-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-label-md font-semibold text-on-surface mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-primary" />
+                    Assign Categories
+                  </span>
+                  <span className="text-body-xs text-secondary font-normal">Optional</span>
+                </label>
+                
+                <div className="p-3 bg-surface-container-low border border-outline-variant rounded-xl space-y-3">
+                  <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pr-1">
+                    {allCategories.length === 0 ? (
+                      <p className="text-body-xs text-secondary italic">No existing categories found. You can add one below.</p>
+                    ) : (
+                      allCategories.map((cat) => {
+                        const isChecked = formData.selectedCategoryIds.includes(cat.id);
+                        return (
+                          <button
+                            type="button"
+                            key={cat.id}
+                            onClick={() => {
+                              const newSelected = isChecked
+                                ? formData.selectedCategoryIds.filter((id) => id !== cat.id)
+                                : [...formData.selectedCategoryIds, cat.id];
+                              setFormData({ ...formData, selectedCategoryIds: newSelected });
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-xs font-semibold transition-all cursor-pointer border ${
+                              isChecked
+                                ? "bg-primary text-on-primary border-primary shadow-xs"
+                                : "bg-surface-container-lowest text-on-surface border-outline-variant hover:border-primary/50"
+                            }`}
+                          >
+                            <Layers className="w-3.5 h-3.5" />
+                            <span>{cat.name}</span>
+                            {isChecked && <CheckCircle2 className="w-3.5 h-3.5 ml-0.5" />}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-outline-variant/60 flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Add new category name..."
+                      value={formData.newCategoryName}
+                      onChange={(e) => setFormData({ ...formData, newCategoryName: e.target.value })}
+                      className="flex-1 px-3 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-xs text-on-surface placeholder:text-secondary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="pt-4 border-t border-outline-variant flex items-center justify-end gap-3">

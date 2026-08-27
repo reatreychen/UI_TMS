@@ -43,6 +43,7 @@ export interface QueueTicket {
   category?: {
     id: string;
     name: string;
+    department?: { id: string; name: string };
   };
   channel?: string;
 }
@@ -354,5 +355,25 @@ export async function bulkDeleteResources(ids: string[]): Promise<void> {
 
 export async function bulkArchiveResources(ids: string[]): Promise<void> {
   await api.post("/resources/bulk-archive", { ids });
+}
+
+export async function fetchTelegramStatus() {
+  const res = await api.get("/telegram/status");
+  return res.data;
+}
+
+export async function sendTelegramTestMessage(chatId?: string) {
+  const res = await api.post("/telegram/test", { chatId });
+  return res.data;
+}
+
+export async function setTelegramChatId(chatId: string) {
+  const res = await api.post("/telegram/chat-id", { chatId });
+  return res.data;
+}
+
+export async function discoverTelegramChatId() {
+  const res = await api.get("/telegram/discover");
+  return res.data;
 }
 

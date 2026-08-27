@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { CreateTicketTrigger } from "./CreateTicketModal";
+import { NotificationBell } from "@/src/components/NotificationBell";
+import { TelegramBotModal } from "./TelegramBotModal";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import {
   logout,
@@ -31,6 +33,7 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
 
   const [mounted, setMounted] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,6 +60,12 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
   const handleLogout = () => {
     setIsMenuOpen(false);
     dispatch(logout());
+  };
+
+  const getProfileHref = () => {
+    if (userRole === "admin") return "/admin/profile";
+    if (userRole === "agent") return "/agent/profile";
+    return "/customer/profile";
   };
 
   const getDashboardHref = () => {
@@ -159,15 +168,19 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
             </CreateTicketTrigger>
 
             {/* Notifications */}
-            <button
-              type="button"
-              aria-label="Notifications"
-              className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-low"
-            >
-              <span className="material-symbols-outlined text-[20px]">
-                notifications
-              </span>
-            </button>
+            {mounted && isAuthenticated ? (
+              <NotificationBell />
+            ) : (
+              <button
+                type="button"
+                aria-label="Notifications"
+                className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-low"
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  notifications
+                </span>
+              </button>
+            )}
 
             {/* Help */}
             <button
@@ -221,6 +234,17 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
                         {userRole}
                       </span>
                     </div>
+
+                    <Link
+                      href={getProfileHref()}
+                      onClick={() => setIsMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-on-surface hover:bg-surface-container-low transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-primary text-[18px]">
+                        account_circle
+                      </span>
+                      View Profile
+                    </Link>
 
                     <Link
                       href={getDashboardHref()}

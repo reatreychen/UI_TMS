@@ -27,6 +27,20 @@ export const fetchPermissionsThunk = createAsyncThunk(
   }
 );
 
+export const createPermissionThunk = createAsyncThunk(
+  "permission/createPermission",
+  async (payload: { module: string; action: string }, { rejectWithValue }) => {
+    try {
+      const res = await adminRoleService.createPermission(payload);
+      return res;
+    } catch (err: any) {
+      return rejectWithValue(
+        err.response?.data?.message || err.message || "Failed to create permission"
+      );
+    }
+  }
+);
+
 const permissionSlice = createSlice({
   name: "permission",
   initialState,
@@ -39,11 +53,16 @@ const permissionSlice = createSlice({
       })
       .addCase(fetchPermissionsThunk.fulfilled, (state, action) => {
         state.loading = false;
-        state.permissions = action.payload;
+        state.permissions = action.payload || [];
       })
       .addCase(fetchPermissionsThunk.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      .addCase(createPermissionThunk.fulfilled, (state, action) => {
+        if (action.payload) {
+          state.permissions.push(action.payload);
+        }
       });
   },
 });

@@ -15,6 +15,8 @@ export default function CategoriesPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formData, setFormData] = useState({ name: "", department_id: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showFilterInput, setShowFilterInput] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -75,6 +77,43 @@ export default function CategoriesPage() {
       setSubmitting(false);
     }
   };
+
+  const handleExportCSV = () => {
+    if (!data?.data || data.data.length === 0) {
+      alert("No category data available to export.");
+      return;
+    }
+
+    const headers = ["Category ID", "Category Name", "Type", "Status", "Assigned Department", "Ticket Items"];
+    const rows = data.data.map((c) => [
+      `"${c.id}"`,
+      `"${c.name.replace(/"/g, '""')}"`,
+      `"Ticket"`,
+      `"Active"`,
+      `"${(c.department?.name || "Unassigned").replace(/"/g, '""')}"`,
+      c.itemCount ?? 0,
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `categories_export_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const filteredCategories = React.useMemo(() => {
+    if (!data?.data) return [];
+    if (!searchQuery.trim()) return data.data;
+    const q = searchQuery.toLowerCase().trim();
+    return data.data.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.department?.name && c.department.name.toLowerCase().includes(q))
+    );
+  }, [data, searchQuery]);
   return (
     <div className="space-y-stack-lg max-w-[1440px] mx-auto w-full animate-in fade-in duration-300">
       {/* Page Header */}
@@ -105,7 +144,7 @@ export default function CategoriesPage() {
             <span className="material-symbols-outlined text-primary">inventory_2</span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-display">42</span>
+            <span className="font-display text-display">{data?.meta.total || data?.data.length || 0}</span>
             <span className="text-label-md text-on-surface-variant">types</span>
           </div>
         </div>
@@ -116,49 +155,70 @@ export default function CategoriesPage() {
             <span className="material-symbols-outlined text-green-600">check_circle</span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-display">38</span>
+            <span className="font-display text-display">{data?.meta.total || data?.data.length || 0}</span>
             <span className="flex items-center text-[12px] font-bold text-green-600">
               <span className="material-symbols-outlined text-[14px]">trending_up</span>
-              +4%
+              100%
             </span>
           </div>
         </div>
         
         <div className="bg-white border border-outline-variant rounded-xl p-6 shadow-sm hover:shadow-md hover:-translate-y-[2px] transition-all duration-300 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-on-surface-variant font-label-md text-label-md">Parent Categories</span>
+            <span className="text-on-surface-variant font-label-md text-label-md">Departments</span>
             <span className="material-symbols-outlined text-secondary">account_tree</span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-display">12</span>
-            <span className="text-label-md text-on-surface-variant">roots</span>
+            <span className="font-display text-display">{departments.length}</span>
+            <span className="text-label-md text-on-surface-variant">active</span>
           </div>
         </div>
         
         <div className="bg-error-container border border-error/20 rounded-xl p-6 shadow-sm hover:shadow-md hover:-translate-y-[2px] transition-all duration-300 flex flex-col justify-between group">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-on-error-container font-label-md text-label-md">Unassigned Items</span>
+            <span className="text-on-error-container font-label-md text-label-md">Unassigned Categories</span>
             <span className="material-symbols-outlined text-error animate-pulse">warning</span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-display text-on-error-container">156</span>
-            <span className="text-label-md text-on-error-container/70">needs action</span>
+            <span className="font-display text-display text-on-error-container">
+              {data?.data.filter((c) => !c.department_id && !c.department).length || 0}
+            </span>
+            <span className="text-label-md text-on-error-container/70">needs department</span>
           </div>
         </div>
       </div>
 
-      {/* Main Split Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+      {/* Main Full Width Layout */}
+      <div className="w-full">
         {/* Registry Table */}
-        <div className="lg:col-span-9 bg-white border border-outline-variant rounded-xl shadow-sm overflow-hidden">
+        <div className="w-full bg-white border border-outline-variant rounded-xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
             <h3 className="font-headline-md text-headline-md">Category Registry</h3>
-            <div className="flex gap-2">
-              <button className="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors">
-                <span className="material-symbols-outlined text-on-surface-variant">filter_list</span>
+            <div className="flex items-center gap-2">
+              {showFilterInput && (
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Filter categories..."
+                  className="px-3 py-1.5 border border-outline-variant rounded-lg text-body-md outline-none focus:border-primary animate-in fade-in duration-200"
+                />
+              )}
+              <button
+                onClick={() => setShowFilterInput(!showFilterInput)}
+                title="Filter Categories"
+                className={`p-2 border border-outline-variant rounded-lg transition-colors cursor-pointer ${
+                  showFilterInput ? "bg-primary/10 text-primary border-primary/30" : "hover:bg-surface-container-low text-on-surface-variant"
+                }`}
+              >
+                <span className="material-symbols-outlined">filter_list</span>
               </button>
-              <button className="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors">
-                <span className="material-symbols-outlined text-on-surface-variant">download</span>
+              <button
+                onClick={handleExportCSV}
+                title="Export Categories CSV"
+                className="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors cursor-pointer text-on-surface-variant hover:text-primary active:scale-95"
+              >
+                <span className="material-symbols-outlined">download</span>
               </button>
             </div>
           </div>
@@ -170,7 +230,7 @@ export default function CategoriesPage() {
                   <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant">Category Name</th>
                   <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant">Type</th>
                   <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant">Status</th>
-                  <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant">Parent Category</th>
+                  <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant">Assigned Department</th>
                   <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant text-center">Items</th>
                   <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant text-right">Actions</th>
                 </tr>
@@ -182,14 +242,14 @@ export default function CategoriesPage() {
                       Loading categories...
                     </td>
                   </tr>
-                ) : data?.data.length === 0 ? (
+                ) : filteredCategories.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-on-surface-variant font-label-md">
                       No categories found.
                     </td>
                   </tr>
                 ) : (
-                  data?.data.map((category) => (
+                  filteredCategories.map((category) => (
                     <tr key={category.id} className="hover:bg-surface-container-low transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -209,7 +269,9 @@ export default function CategoriesPage() {
                       <td className="px-6 py-4 text-body-md text-on-surface-variant">
                         {category.department?.name || "No Department"}
                       </td>
-                      <td className="px-6 py-4 text-center text-body-md font-code">0</td>
+                      <td className="px-6 py-4 text-center text-body-md font-code">
+                        {category.itemCount ?? 0}
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
@@ -253,65 +315,6 @@ export default function CategoriesPage() {
                 <button className="w-8 h-8 flex items-center justify-center bg-primary text-on-primary rounded-lg font-label-md text-label-md">{data?.meta.page || 1}</button>
               </div>
               <button disabled={!data || data.meta.page >= data.meta.totalPages} className="px-4 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg font-label-md text-label-md transition-colors disabled:opacity-50">Next</button>
-            </div>
-          </div>
-        </div>
-        
-        {/* Sidebar / Quick Links */}
-        <div className="lg:col-span-3 space-y-gutter">
-          {/* Optimization Tip Card */}
-          <div className="bg-primary text-on-primary rounded-xl p-6 shadow-xl shadow-primary/10 relative overflow-hidden group">
-            <div className="absolute -right-4 -top-4 opacity-10 group-hover:scale-110 transition-transform duration-700">
-              <span className="material-symbols-outlined text-[120px]">lightbulb</span>
-            </div>
-            <div className="relative z-10 space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined">auto_fix_high</span>
-                <h4 className="font-headline-md text-[16px] leading-tight">Optimization Tip</h4>
-              </div>
-              <p className="text-[13px] leading-relaxed opacity-90">We detected 4 categories with similar resource tags. Merging 'Web Support' and 'Online Services' could reduce ticket routing delays by 12%.</p>
-              <button className="w-full py-2 bg-white text-primary font-label-md text-label-md rounded-lg hover:bg-opacity-90 active:scale-95 transition-all">Review Suggestions</button>
-            </div>
-          </div>
-          
-          {/* Quick Links Card */}
-          <div className="bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-outline-variant">
-              <h4 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Quick Actions</h4>
-            </div>
-            <div className="divide-y divide-outline-variant">
-              <a className="flex items-center justify-between px-6 py-4 hover:bg-surface-container-low transition-colors group" href="#">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-secondary">admin_panel_settings</span>
-                  <span className="text-body-md font-semibold">Category Permissions</span>
-                </div>
-                <span className="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
-              </a>
-              <a className="flex items-center justify-between px-6 py-4 hover:bg-surface-container-low transition-colors group" href="#">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-secondary">speed</span>
-                  <span className="text-body-md font-semibold">SLA Mapping</span>
-                </div>
-                <span className="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
-              </a>
-              <a className="flex items-center justify-between px-6 py-4 hover:bg-surface-container-low transition-colors group" href="#">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-secondary">archive</span>
-                  <span className="text-body-md font-semibold">Archived List</span>
-                </div>
-                <span className="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
-              </a>
-            </div>
-          </div>
-          
-          {/* Support Card */}
-          <div className="bg-surface-container border border-outline-variant rounded-xl p-6">
-            <div className="flex flex-col items-center text-center space-y-3">
-              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
-                <span className="material-symbols-outlined text-primary">auto_graph</span>
-              </div>
-              <h5 className="font-label-md text-label-md text-on-surface">Data Insight</h5>
-              <p className="text-[12px] text-on-surface-variant">The 'Network' category has seen a 25% increase in traffic this week. Consider reviewing resource allocations.</p>
             </div>
           </div>
         </div>

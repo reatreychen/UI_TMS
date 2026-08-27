@@ -1,10 +1,21 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { adminRoleService, AdminPermission } from "@/src/services/adminRoleService";
+import { AdminPermission } from "@/src/services/adminRoleService";
 import { AdminRole } from "@/src/services/adminUserService";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
-import { fetchPermissionsThunk } from "@/src/store/slices/permissionSlice";
+import { fetchPermissionsThunk, createPermissionThunk } from "@/src/store/slices/permissionSlice";
+import {
+  fetchRolesThunk,
+  createRoleThunk,
+  updateRoleThunk,
+  deleteRoleThunk,
+  fetchRolePermissionsThunk,
+  replaceRolePermissionsThunk,
+  setSelectedRole,
+  toggleRolePermission,
+  setSelectedRolePermissions,
+} from "@/src/store/slices/roleSlice";
 
 function getErrorMessage(error: unknown): string {
   if (error && typeof error === "object" && "response" in error) {
@@ -17,20 +28,66 @@ function getErrorMessage(error: unknown): string {
   return "An unexpected error occurred.";
 }
 
+const SYSTEM_PERMISSION_CATALOG: (AdminPermission & { label: string })[] = [
+  { id: "perm-tk-1", module: "tickets", action: "create", label: "Create Ticket" },
+  { id: "perm-tk-2", module: "tickets", action: "read",   label: "View Tickets" },
+  { id: "perm-tk-3", module: "tickets", action: "update", label: "Update Ticket" },
+  { id: "perm-tk-4", module: "tickets", action: "delete", label: "Delete Ticket" },
+  { id: "perm-tk-5", module: "tickets", action: "assign", label: "Assign Ticket" },
+  { id: "perm-tk-6", module: "tickets", action: "close",  label: "Close Ticket" },
+
+  { id: "perm-us-1", module: "users", action: "create", label: "Create User" },
+  { id: "perm-us-2", module: "users", action: "read",   label: "View Users" },
+  { id: "perm-us-3", module: "users", action: "update", label: "Update User" },
+  { id: "perm-us-4", module: "users", action: "delete", label: "Delete User" },
+
+  { id: "perm-ag-1", module: "agents", action: "create", label: "Onboard Agent" },
+  { id: "perm-ag-2", module: "agents", action: "read",   label: "View Agents" },
+  { id: "perm-ag-3", module: "agents", action: "update", label: "Edit Agent" },
+  { id: "perm-ag-4", module: "agents", action: "delete", label: "Remove Agent" },
+
+  { id: "perm-cat-1", module: "categories", action: "create", label: "Create Category" },
+  { id: "perm-cat-2", module: "categories", action: "read",   label: "View Categories" },
+  { id: "perm-cat-3", module: "categories", action: "update", label: "Update Category" },
+  { id: "perm-cat-4", module: "categories", action: "delete", label: "Delete Category" },
+
+  { id: "perm-dept-1", module: "departments", action: "create", label: "Create Department" },
+  { id: "perm-dept-2", module: "departments", action: "read",   label: "View Departments" },
+  { id: "perm-dept-3", module: "departments", action: "update", label: "Update Department" },
+  { id: "perm-dept-4", module: "departments", action: "delete", label: "Delete Department" },
+
+  { id: "perm-role-1", module: "roles", action: "create", label: "Create Role" },
+  { id: "perm-role-2", module: "roles", action: "read",   label: "View Roles" },
+  { id: "perm-role-3", module: "roles", action: "update", label: "Edit Permissions" },
+  { id: "perm-role-4", module: "roles", action: "delete", label: "Delete Role" },
+
+  { id: "perm-kb-1", module: "knowledge_base", action: "create", label: "Create Article" },
+  { id: "perm-kb-2", module: "knowledge_base", action: "read",   label: "View Articles" },
+  { id: "perm-kb-3", module: "knowledge_base", action: "update", label: "Update Article" },
+  { id: "perm-kb-4", module: "knowledge_base", action: "delete", label: "Delete Article" },
+
+  { id: "perm-audit-1", module: "audit_logs", action: "read",   label: "View Audit Logs" },
+  { id: "perm-audit-2", module: "audit_logs", action: "export", label: "Export Audit Logs" },
+
+  { id: "perm-rpt-1", module: "reports", action: "read",   label: "View Analytics & Reports" },
+  { id: "perm-rpt-2", module: "reports", action: "export", label: "Export Reports (CSV/PDF)" },
+
+  { id: "perm-tc-1", module: "ticket_comments", action: "create", label: "Add Comment" },
+  { id: "perm-tc-2", module: "ticket_comments", action: "read",   label: "View Comments" },
+  { id: "perm-tc-3", module: "ticket_comments", action: "delete", label: "Delete Comment" },
+];
+
 export default function PermissionsPage() {
   const dispatch = useAppDispatch();
   const { permissions: allPermissions } = useAppSelector((state) => state.permission);
+  const { roles, selectedRole, selectedRolePermissionIds, loading: rolesLoading, isSaving } = useAppSelector(
+    (state) => state.role
+  );
 
-  const [roles, setRoles] = useState<AdminRole[]>([]);
-  const [selectedRole, setSelectedRole] = useState<AdminRole | null>(null);
-  const [selectedRolePermissionIds, setSelectedRolePermissionIds] = useState<Set<string>>(new Set());
   const [selectedModule, setSelectedModule] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
-
-  const [enableAll, setEnableAll] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
 
@@ -43,58 +100,79 @@ export default function PermissionsPage() {
   const [editRoleName, setEditRoleName] = useState("");
   const [editRoleDesc, setEditRoleDesc] = useState("");
 
-  const modules = useMemo(() => {
-    const mods = new Set(allPermissions.map((p) => p.module));
-    return Array.from(mods).sort();
+  // Create Permission Form
+  const [newPermModule, setNewPermModule] = useState("");
+  const [newPermAction, setNewPermAction] = useState("");
+
+  const effectivePermissions = useMemo(() => {
+    if (!allPermissions || allPermissions.length === 0) {
+      return SYSTEM_PERMISSION_CATALOG;
+    }
+
+    const usedDbIds = new Set<string>();
+    // Exact match: catalog module/action now == DB module/action
+    const mappedCatalog = SYSTEM_PERMISSION_CATALOG.map((cat) => {
+      const dbMatch = allPermissions.find(
+        (dbP) =>
+          !usedDbIds.has(dbP.id) &&
+          dbP.module === cat.module &&
+          dbP.action === cat.action
+      );
+      if (dbMatch) {
+        usedDbIds.add(dbMatch.id);
+        return { ...cat, id: dbMatch.id };
+      }
+      return cat;
+    });
+
+    // Append any DB permissions not in catalog
+    allPermissions.forEach((dbP) => {
+      if (!usedDbIds.has(dbP.id)) {
+        mappedCatalog.push({
+          id: dbP.id,
+          module: dbP.module,
+          action: dbP.action,
+          label: `${dbP.action.replace(/_/g, " ")}`,
+        });
+        usedDbIds.add(dbP.id);
+      }
+    });
+
+    return mappedCatalog;
   }, [allPermissions]);
 
+  const modules = useMemo(() => {
+    const mods = new Set(effectivePermissions.map((p) => p.module));
+    return Array.from(mods).sort();
+  }, [effectivePermissions]);
+
   const permissionsByModule = useMemo(() => {
-    const map = new Map<string, AdminPermission[]>();
-    allPermissions.forEach((p) => {
+    const map = new Map<string, (AdminPermission & { label: string })[]>();
+    effectivePermissions.forEach((p) => {
       const list = map.get(p.module) || [];
       list.push(p);
       map.set(p.module, list);
     });
     return map;
-  }, [allPermissions]);
+  }, [effectivePermissions]);
+
+  // Keep selectedModule synchronized with available modules
+  useEffect(() => {
+    if (modules.length > 0 && (!selectedModule || !modules.includes(selectedModule))) {
+      setSelectedModule(modules[0]);
+    }
+  }, [modules, selectedModule]);
 
   useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  const fetchInitialData = async () => {
-    try {
-      const [fetchedRoles, actionResult] = await Promise.all([
-        adminRoleService.getRoles(),
-        dispatch(fetchPermissionsThunk())
-      ]);
-      setRoles(fetchedRoles);
-      
-      if (fetchedRoles.length > 0) {
-        setSelectedRole(fetchedRoles[0]);
-      }
-      
-      const fetchedPermissions = actionResult.payload as AdminPermission[];
-      if (fetchedPermissions && Array.isArray(fetchedPermissions)) {
-        const mods = Array.from(new Set(fetchedPermissions.map(p => p.module)));
-        if (mods.length > 0) {
-          setSelectedModule(mods.sort()[0]);
-        }
-      }
-    } catch (err) {
-      triggerToast("Failed to fetch data.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    dispatch(fetchRolesThunk());
+    dispatch(fetchPermissionsThunk());
+  }, [dispatch]);
 
   useEffect(() => {
     if (selectedRole) {
-      adminRoleService.getRolePermissions(selectedRole.id).then((perms) => {
-        setSelectedRolePermissionIds(new Set(perms.map(p => p.id)));
-      });
+      dispatch(fetchRolePermissionsThunk(selectedRole.id));
     }
-  }, [selectedRole]);
+  }, [selectedRole, dispatch]);
 
   useEffect(() => {
     const handleSearch = (e: Event) => {
@@ -115,45 +193,114 @@ export default function PermissionsPage() {
   };
 
   const handleTogglePermission = (id: string) => {
-    const nextSet = new Set(selectedRolePermissionIds);
-    if (nextSet.has(id)) {
-      nextSet.delete(id);
-    } else {
-      nextSet.add(id);
-    }
-    setSelectedRolePermissionIds(nextSet);
+    dispatch(toggleRolePermission(id));
   };
 
+  const currentModulePerms = useMemo(() => {
+    return permissionsByModule.get(selectedModule) || [];
+  }, [permissionsByModule, selectedModule]);
+
+  const isModuleAllEnabled = useMemo(() => {
+    if (currentModulePerms.length === 0) return false;
+    return currentModulePerms.every((p) => selectedRolePermissionIds.includes(p.id));
+  }, [currentModulePerms, selectedRolePermissionIds]);
+
   const handleEnableAllToggle = () => {
-    const nextState = !enableAll;
-    setEnableAll(nextState);
+    const nextState = !isModuleAllEnabled;
+    const currentModulePermIds = currentModulePerms.map((p) => p.id);
+    let nextPermissionIds: string[];
+
     if (nextState) {
-      setSelectedRolePermissionIds(new Set(allPermissions.map(p => p.id)));
+      const combined = new Set([...selectedRolePermissionIds, ...currentModulePermIds]);
+      nextPermissionIds = Array.from(combined);
     } else {
-      setSelectedRolePermissionIds(new Set());
+      nextPermissionIds = selectedRolePermissionIds.filter((id) => !currentModulePermIds.includes(id));
     }
-    triggerToast(nextState ? "All permissions enabled." : "All permissions disabled.");
+
+    dispatch(setSelectedRolePermissions(nextPermissionIds));
+    triggerToast(
+      nextState
+        ? `All permissions enabled for module '${selectedModule}'.`
+        : `All permissions disabled for module '${selectedModule}'.`
+    );
+  };
+
+  const handleApplyPreset = (presetType: "admin" | "agent" | "user") => {
+    let permIds: string[] = [];
+    if (presetType === "admin") {
+      permIds = effectivePermissions.map((p) => p.id);
+      triggerToast("Applied Full Admin Preset (All permissions enabled)");
+    } else if (presetType === "agent") {
+      permIds = effectivePermissions
+        .filter((p) =>
+          ["tickets", "knowledge_base", "reports", "categories", "departments", "agents"].includes(p.module)
+        )
+        .map((p) => p.id);
+      triggerToast("Applied Support Agent Preset (Tickets, KB, Reports & Team)");
+    } else if (presetType === "user") {
+      permIds = effectivePermissions
+        .filter(
+          (p) =>
+            (p.module === "tickets" && (p.action === "create" || p.action === "read")) ||
+            (p.module === "knowledge_base" && p.action === "read") ||
+            (p.module === "ticket_comments" && (p.action === "create" || p.action === "read"))
+        )
+        .map((p) => p.id);
+      triggerToast("Applied Standard User Preset (Ticket Creation & KB Access)");
+    }
+
+    dispatch(setSelectedRolePermissions(permIds));
   };
 
   const handleSaveChanges = async () => {
     if (!selectedRole) return;
-    setIsSaving(true);
     try {
-      await adminRoleService.replaceRolePermissions(selectedRole.id, Array.from(selectedRolePermissionIds));
-      triggerToast(`Permission matrix saved for role '${selectedRole.name}'. Audit trail logged.`);
+      const validPermissionIds: string[] = [];
+      for (const id of selectedRolePermissionIds) {
+        const dbPerm = allPermissions.find((p) => p.id === id);
+        if (dbPerm) {
+          validPermissionIds.push(dbPerm.id);
+        } else {
+          const catalogItem = SYSTEM_PERMISSION_CATALOG.find((cat) => cat.id === id);
+          if (catalogItem) {
+            const formattedMod = catalogItem.module.toLowerCase().replace(/\s+/g, "_");
+            const formattedAct = catalogItem.action.toLowerCase().replace(/\s+/g, "_");
+            try {
+              const res = await dispatch(
+                createPermissionThunk({ module: formattedMod, action: formattedAct })
+              );
+              if (createPermissionThunk.fulfilled.match(res) && res.payload?.id) {
+                validPermissionIds.push(res.payload.id);
+              }
+            } catch (err) {
+              console.warn("Failed auto-creating permission:", catalogItem, err);
+            }
+          }
+        }
+      }
+
+      const result = await dispatch(
+        replaceRolePermissionsThunk({
+          roleId: selectedRole.id,
+          permissionIds: validPermissionIds,
+        })
+      );
+      if (replaceRolePermissionsThunk.fulfilled.match(result)) {
+        triggerToast(`Permission matrix saved for role '${selectedRole.name}'!`);
+        dispatch(fetchPermissionsThunk());
+        dispatch(fetchRolePermissionsThunk(selectedRole.id));
+      } else {
+        triggerToast((result.payload as string) || "Failed to save permissions.");
+      }
     } catch (error) {
-      triggerToast("Failed to save permissions.");
-    } finally {
-      setIsSaving(false);
+      triggerToast(getErrorMessage(error) || "Failed to save permissions.");
     }
   };
 
   const handleResetPermissions = () => {
     if (selectedRole) {
-      adminRoleService.getRolePermissions(selectedRole.id).then((perms) => {
-        setSelectedRolePermissionIds(new Set(perms.map(p => p.id)));
-        triggerToast(`Permissions reset to saved state for '${selectedRole.name}'.`);
-      });
+      dispatch(fetchRolePermissionsThunk(selectedRole.id));
+      triggerToast(`Permissions reset to saved state for '${selectedRole.name}'.`);
     }
   };
 
@@ -162,18 +309,51 @@ export default function PermissionsPage() {
     if (!newRoleName.trim()) return;
 
     try {
-      const newRole = await adminRoleService.createRole({
-        name: newRoleName.trim(),
-        description: newRoleDesc.trim(),
-      });
-      setRoles([...roles, newRole]);
-      setSelectedRole(newRole);
-      setNewRoleName("");
-      setNewRoleDesc("");
-      setShowCreateModal(false);
-      triggerToast(`Role '${newRole.name}' created!`);
+      const result = await dispatch(
+        createRoleThunk({
+          name: newRoleName.trim(),
+          description: newRoleDesc.trim(),
+        })
+      );
+      if (createRoleThunk.fulfilled.match(result)) {
+        setNewRoleName("");
+        setNewRoleDesc("");
+        setShowCreateModal(false);
+        triggerToast(`Role '${result.payload.name}' created successfully!`);
+      } else {
+        triggerToast((result.payload as string) || "Failed to create role.");
+      }
     } catch (error) {
-       triggerToast(getErrorMessage(error) || "Failed to create role.");
+      triggerToast(getErrorMessage(error) || "Failed to create role.");
+    }
+  };
+
+  const handleCreatePermissionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPermModule.trim() || !newPermAction.trim()) return;
+
+    try {
+      const formattedModule = newPermModule.trim().toLowerCase().replace(/\s+/g, "_");
+      const formattedAction = newPermAction.trim().toLowerCase().replace(/\s+/g, "_");
+
+      const actionResult = await dispatch(
+        createPermissionThunk({
+          module: formattedModule,
+          action: formattedAction,
+        })
+      );
+
+      if (createPermissionThunk.fulfilled.match(actionResult)) {
+        triggerToast(`Permission '${formattedModule}:${formattedAction}' created successfully!`);
+        setSelectedModule(formattedModule);
+        setNewPermModule("");
+        setNewPermAction("");
+        setShowPermissionModal(false);
+      } else {
+        triggerToast((actionResult.payload as string) || "Failed to create permission.");
+      }
+    } catch (err) {
+      triggerToast(getErrorMessage(err));
     }
   };
 
@@ -182,17 +362,22 @@ export default function PermissionsPage() {
     if (!editRoleName.trim() || !editingRole) return;
 
     try {
-      const updated = await adminRoleService.updateRole(editingRole.id, {
-        name: editRoleName.trim(),
-        description: editRoleDesc.trim(),
-      });
-      setRoles(roles.map((r) => (r.id === editingRole.id ? updated : r)));
-      if (selectedRole?.id === editingRole.id) {
-        setSelectedRole(updated);
+      const result = await dispatch(
+        updateRoleThunk({
+          id: editingRole.id,
+          payload: {
+            name: editRoleName.trim(),
+            description: editRoleDesc.trim(),
+          },
+        })
+      );
+      if (updateRoleThunk.fulfilled.match(result)) {
+        setShowEditModal(false);
+        setEditingRole(null);
+        triggerToast(`Role '${result.payload.name}' updated!`);
+      } else {
+        triggerToast((result.payload as string) || "Failed to update role.");
       }
-      setShowEditModal(false);
-      setEditingRole(null);
-      triggerToast(`Role '${updated.name}' updated!`);
     } catch (error) {
       triggerToast(getErrorMessage(error) || "Failed to update role.");
     }
@@ -200,23 +385,27 @@ export default function PermissionsPage() {
 
   const handleDeleteRole = async (role: AdminRole, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`Are you sure you want to delete the role ${role.name}?`)) {
+    if (confirm(`Are you sure you want to delete the role "${role.name}"?`)) {
       try {
-        await adminRoleService.deleteRole(role.id);
-        const newRoles = roles.filter(r => r.id !== role.id);
-        setRoles(newRoles);
-        if (selectedRole?.id === role.id) {
-           setSelectedRole(newRoles[0] || null);
+        const result = await dispatch(deleteRoleThunk(role.id));
+        if (deleteRoleThunk.fulfilled.match(result)) {
+          triggerToast(`Deleted role '${role.name}'`);
+        } else {
+          triggerToast((result.payload as string) || "Failed to delete role.");
         }
-        triggerToast(`Deleted role '${role.name}'`);
       } catch (error) {
         triggerToast("Failed to delete role. It may be in use.");
       }
     }
   };
 
-  if (isLoading) {
-    return <div className="p-8 text-center text-on-surface">Loading configurations...</div>;
+  if (rolesLoading && roles.length === 0) {
+    return (
+      <div className="p-12 text-center text-on-surface flex flex-col items-center justify-center gap-3">
+        <span className="material-symbols-outlined text-4xl animate-spin text-primary">sync</span>
+        <p className="font-bold text-body-lg">Loading security configurations...</p>
+      </div>
+    );
   }
 
   return (
@@ -231,13 +420,22 @@ export default function PermissionsPage() {
             Configure granular access control, define administrative boundaries, and manage role-based security policies for the entire kinetic enterprise ecosystem.
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-primary text-on-primary px-6 py-2.5 rounded-lg font-bold shadow-sm hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 h-fit cursor-pointer"
-        >
-          <span className="material-symbols-outlined">add_moderator</span>
-          <span>Create New Role</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowPermissionModal(true)}
+            className="border border-outline text-on-surface hover:bg-surface-container px-4 py-2.5 rounded-lg font-bold shadow-xs active:scale-95 transition-all flex items-center gap-2 h-fit cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-primary">vpn_key</span>
+            <span>Add Permission</span>
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-primary text-on-primary px-6 py-2.5 rounded-lg font-bold shadow-sm hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 h-fit cursor-pointer"
+          >
+            <span className="material-symbols-outlined">add_moderator</span>
+            <span>Create New Role</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -277,10 +475,13 @@ export default function PermissionsPage() {
           </h3>
           <div className="flex gap-2">
             <button
-              onClick={() => triggerToast("System roles list filtered.")}
+              onClick={() => {
+                dispatch(fetchRolesThunk());
+                triggerToast("System roles refreshed.");
+              }}
               className="px-3 py-1.5 border border-outline-variant rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors flex items-center gap-1 cursor-pointer font-medium"
             >
-              <span className="material-symbols-outlined text-[18px]">filter_list</span> Filter
+              <span className="material-symbols-outlined text-[18px]">refresh</span> Refresh
             </button>
           </div>
         </div>
@@ -291,18 +492,18 @@ export default function PermissionsPage() {
               <tr className="bg-surface-container text-on-surface-variant font-label-md text-label-md border-b border-outline-variant uppercase tracking-wider">
                 <th className="px-gutter py-4 font-semibold">Role Name</th>
                 <th className="px-gutter py-4 font-semibold">Description</th>
-                <th className="px-gutter py-4 text-center font-semibold">Users Assigned</th>
+                <th className="px-gutter py-4 text-center font-semibold">Status</th>
                 <th className="px-gutter py-4 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant font-body-md text-body-md">
               {roles.map((role) => {
                 const isSelected = selectedRole?.id === role.id;
-                const isDefault = ["Super Admin", "Support Manager", "Senior Agent", "Junior Agent"].includes(role.name);
+                const isDefault = ["Super Admin", "Support Manager", "Senior Agent", "Junior Agent", "User"].includes(role.name);
                 return (
                   <tr
                     key={role.id}
-                    onClick={() => setSelectedRole(role)}
+                    onClick={() => dispatch(setSelectedRole(role))}
                     className={`transition-colors group cursor-pointer ${
                       isSelected
                         ? "bg-primary/5 border-l-4 border-l-primary font-medium"
@@ -323,8 +524,12 @@ export default function PermissionsPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-gutter py-4 text-on-surface-variant">{role.description}</td>
-                    <td className="px-gutter py-4 text-center font-bold">-</td>
+                    <td className="px-gutter py-4 text-on-surface-variant">{role.description || "No description provided."}</td>
+                    <td className="px-gutter py-4 text-center">
+                      <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Active
+                      </span>
+                    </td>
                     <td className="px-gutter py-4 text-right">
                       <div
                         className={`flex justify-end gap-2 transition-opacity ${
@@ -384,9 +589,13 @@ export default function PermissionsPage() {
             )}
 
             <div className="space-y-1">
-              {modules.map(
-                (mod) => {
+              {modules.length === 0 ? (
+                <p className="text-xs text-on-surface-variant italic p-2">No modules found.</p>
+              ) : (
+                modules.map((mod) => {
                   const isActive = selectedModule === mod;
+                  const modPerms = permissionsByModule.get(mod) || [];
+                  const enabledCount = modPerms.filter((p) => selectedRolePermissionIds.includes(p.id)).length;
                   return (
                     <button
                       key={mod}
@@ -397,11 +606,13 @@ export default function PermissionsPage() {
                           : "hover:bg-surface-container text-on-surface-variant font-normal"
                       }`}
                     >
-                      <span className="truncate pr-2">{mod.replace(/_/g, ' ')}</span>
-                      <span className="material-symbols-outlined text-sm shrink-0">chevron_right</span>
+                      <span className="truncate pr-2 capitalize">{mod.replace(/_/g, " ")}</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-surface-container-high font-semibold text-on-surface-variant">
+                        {enabledCount}/{modPerms.length}
+                      </span>
                     </button>
                   );
-                }
+                })
               )}
             </div>
           </div>
@@ -415,51 +626,86 @@ export default function PermissionsPage() {
                 Module Permissions
               </h4>
               <p className="text-on-surface-variant font-body-md">
-                Configure granular actions for the '{selectedModule}' module.
+                Configure granular actions for the <span className="font-bold text-on-surface capitalize">'{selectedModule || "N/A"}'</span> module.
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-label-md font-label-md text-on-surface-variant font-semibold">
-                Enable All
-              </span>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={enableAll}
-                  onChange={handleEnableAllToggle}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
-              </label>
-            </div>
+            {selectedModule && currentModulePerms.length > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="text-label-md font-label-md text-on-surface-variant font-semibold">
+                  Enable All in Module
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isModuleAllEnabled}
+                    onChange={handleEnableAllToggle}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
+                </label>
+              </div>
+            )}
           </div>
 
           <div className="p-gutter space-y-6">
+            {/* Quick Role Presets */}
+            {selectedRole && (
+              <div className="flex flex-wrap items-center gap-2 pb-4 border-b border-outline-variant">
+                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mr-1">
+                  Role Presets:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPreset("admin")}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 border border-purple-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">admin_panel_settings</span>
+                  Admin (Full Access)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPreset("agent")}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">support_agent</span>
+                  Support Agent
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPreset("user")}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">person</span>
+                  Standard User
+                </button>
+              </div>
+            )}
+
             {/* Dynamic Module Section */}
-            {selectedModule && (
+            {selectedModule && currentModulePerms.length > 0 ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-primary font-bold mb-2">
                   <span className="material-symbols-outlined">settings</span>
-                  <span className="uppercase tracking-widest text-[11px]">{selectedModule.replace(/_/g, ' ')}</span>
+                  <span className="uppercase tracking-widest text-[11px]">{selectedModule.replace(/_/g, " ")}</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {permissionsByModule.get(selectedModule)?.map((perm) => {
-                    const isEnabled = selectedRolePermissionIds.has(perm.id);
+                  {currentModulePerms.map((perm, idx) => {
+                    const isEnabled = selectedRolePermissionIds.includes(perm.id);
                     return (
                       <div
-                        key={perm.id}
+                        key={`${perm.id}-${idx}`}
                         onClick={() => handleTogglePermission(perm.id)}
-                        className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${
+                        className={`flex items-center justify-between p-3.5 rounded-lg border transition-all cursor-pointer ${
                           isEnabled
-                          ? "border-primary/40 bg-primary/5"
-                          : "border-outline-variant hover:border-outline"
+                            ? "border-primary/40 bg-primary/5 shadow-xs"
+                            : "border-outline-variant hover:border-outline bg-surface-container-lowest"
                         }`}
                       >
                         <div className="flex flex-col">
-                          <span className="font-bold text-on-surface">
-                            {perm.action}
+                          <span className="font-bold text-on-surface capitalize">
+                            {(perm as AdminPermission & { label?: string }).label || perm.action.replace(/_/g, " ")}
                           </span>
-                          <span className="text-[11px] text-on-surface-variant">{perm.module}</span>
+                          <span className="text-[11px] text-on-surface-variant">Module: {perm.module.replace(/_/g, " ")}</span>
                         </div>
                         <input
                           type="checkbox"
@@ -471,6 +717,14 @@ export default function PermissionsPage() {
                     );
                   })}
                 </div>
+              </div>
+            ) : (
+              <div className="p-8 text-center border border-dashed border-outline-variant rounded-xl space-y-3">
+                <span className="material-symbols-outlined text-4xl text-outline">key_off</span>
+                <p className="font-bold text-on-surface">No permissions found for this module.</p>
+                <p className="text-xs text-on-surface-variant max-w-sm mx-auto">
+                  Click "Add Permission" above to define actions for custom modules.
+                </p>
               </div>
             )}
 
@@ -633,6 +887,72 @@ export default function PermissionsPage() {
                   className="px-5 py-2 text-body-md font-semibold bg-primary text-on-primary rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-sm cursor-pointer"
                 >
                   Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Permission Modal */}
+      {showPermissionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-outline-variant pb-3 mb-4">
+              <h3 className="text-headline-md font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">vpn_key</span>
+                Add Module Permission
+              </h3>
+              <button
+                onClick={() => setShowPermissionModal(false)}
+                className="text-outline hover:text-on-surface cursor-pointer"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePermissionSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-outline uppercase mb-1">
+                  Module Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newPermModule}
+                  onChange={(e) => setNewPermModule(e.target.value)}
+                  placeholder="e.g. analytics, billing, tickets"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-body-md focus:ring-2 focus:ring-primary outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-outline uppercase mb-1">
+                  Action Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newPermAction}
+                  onChange={(e) => setNewPermAction(e.target.value)}
+                  placeholder="e.g. read, export, manage, approve"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-body-md focus:ring-2 focus:ring-primary outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-outline-variant">
+                <button
+                  type="button"
+                  onClick={() => setShowPermissionModal(false)}
+                  className="px-4 py-2 text-body-md font-semibold text-secondary hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-body-md font-semibold bg-primary text-on-primary rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-sm cursor-pointer"
+                >
+                  Create Permission
                 </button>
               </div>
             </form>

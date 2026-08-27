@@ -67,14 +67,6 @@ export default function UnauthorizedPage() {
           </p>
         </div>
       </div>
-
-      {/* Brand Footer Mark */}
-      <div className="mt-stack-lg flex items-center gap-2 opacity-60">
-        <span className="material-symbols-outlined text-on-surface-variant text-lg">bolt</span>
-        <span className="font-display text-body-md font-bold text-on-surface-variant">
-          Kinetic Enterprise
-        </span>
-      </div>
     </div>
   );
 }

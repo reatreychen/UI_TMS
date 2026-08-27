@@ -48,50 +48,6 @@ export default function RegisterPage() {
 
   return (
     <div className="font-body-md text-body-md text-on-surface min-h-screen flex flex-col bg-surface-dim">
-      {/* Top Navigation Bar */}
-      <nav className="bg-surface border-b border-outline-variant flex justify-between items-center w-full px-container-margin py-3.5 max-w-[1440px] mx-auto z-50">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary text-3xl">bolt</span>
-          <span className="font-display text-headline-md font-bold text-primary">
-            Kinetic Enterprise
-          </span>
-        </Link>
-        <div className="hidden md:flex items-center gap-stack-lg">
-          <Link
-            href="/customer/support"
-            className="font-body-md text-body-md text-secondary hover:text-primary transition-colors"
-          >
-            Support
-          </Link>
-          <Link
-            href="/admin/permissions"
-            className="font-body-md text-body-md text-secondary hover:text-primary transition-colors"
-          >
-            Security
-          </Link>
-          <Link
-            href="/admin/audit-logs"
-            className="font-body-md text-body-md text-secondary hover:text-primary transition-colors"
-          >
-            Status
-          </Link>
-        </div>
-        <div className="flex items-center gap-stack-md">
-          <Link
-            href="/login"
-            className="text-secondary hover:text-primary font-semibold transition-colors"
-          >
-            Login
-          </Link>
-          <Link
-            href="/register"
-            className="bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-semibold hover:opacity-90 transition-all"
-          >
-            Get Started
-          </Link>
-        </div>
-      </nav>
-
       {/* Main Content: Registration Canvas */}
       <main className="flex-grow flex items-center justify-center px-container-margin py-stack-lg relative overflow-hidden">
         {/* Subtle Atmospheric Background Detail */}
@@ -99,7 +55,6 @@ export default function RegisterPage() {
           <div className="absolute -top-[20%] -left-[10%] w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px]" />
           <div className="absolute -bottom-[20%] -right-[10%] w-[500px] h-[500px] bg-secondary-container/10 rounded-full blur-[100px]" />
         </div>
-
         {/* Registration Card */}
         <div className="w-full max-w-[480px] bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl p-stack-lg z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="text-center mb-stack-lg">

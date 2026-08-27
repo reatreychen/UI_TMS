@@ -13,6 +13,7 @@ import {
   fetchAgentTicketThunk,
   assignAgentTicketThunk,
   resolveAgentTicketThunk,
+  updateAgentTicketStatusThunk,
   clearAgentTicket,
 } from "@/src/store/slices/agentTicketSlice";
 
@@ -108,6 +109,19 @@ export default function AgentTicketDetailPage() {
     }
   };
 
+  const handleStatusChange = async (newStatus: string) => {
+    if (!id || isResolving || isAssigning) return;
+
+    try {
+      await dispatch(updateAgentTicketStatusThunk({ ticketId: id, status: newStatus })).unwrap();
+      toast.success(`Status updated to ${newStatus.replace(/_/g, " ")}.`, { id: `status-${id}` });
+    } catch (actionError) {
+      toast.error(getActionErrorMessage(actionError, "Failed to update ticket status."), {
+        id: `status-${id}`,
+      });
+    }
+  };
+
   // Loading state (first load only)
   if (loading && !ticketData) {
     return (
@@ -138,6 +152,7 @@ export default function AgentTicketDetailPage() {
           ticket={ticketData}
           onAssign={handleAssign}
           onResolve={handleResolve}
+          onStatusChange={handleStatusChange}
           isAssigning={isAssigning}
           isResolving={isResolving}
         />

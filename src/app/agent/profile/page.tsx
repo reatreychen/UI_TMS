@@ -689,7 +689,7 @@ function compressImage(file: File, maxWidth = 500, maxHeight = 500, quality = 0.
 
             <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-5 shadow-xs">
               <div className="flex items-center justify-between text-on-surface-variant mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">CSAT Score</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Customer Rating (CSAT)</span>
                 <Award className="size-5 text-amber-500" />
               </div>
               <p className="text-headline-lg font-bold text-on-surface">4.9 / 5.0</p>

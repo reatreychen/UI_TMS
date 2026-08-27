@@ -18,6 +18,7 @@ interface UserFormState {
   roleId: string;
   departmentId: string;
   isActive: boolean;
+  accountLocked?: boolean;
 }
 
 const emptyInviteForm: UserFormState = {
@@ -28,6 +29,7 @@ const emptyInviteForm: UserFormState = {
   roleId: "",
   departmentId: "",
   isActive: true,
+  accountLocked: false,
 };
 
 function getInitials(name: string) {
@@ -283,7 +285,8 @@ export default function AdminUsersPage() {
       jobTitle: user.jobTitle || "",
       roleId: user.roleId || "",
       departmentId: user.departmentId || "",
-      isActive: user.isActive,
+      isActive: user.accountLocked ? false : user.isActive,
+      accountLocked: user.accountLocked || false,
     });
   };
 
@@ -300,6 +303,7 @@ export default function AdminUsersPage() {
         roleId: editForm.roleId || null,
         departmentId: editForm.departmentId || null,
         isActive: editForm.isActive,
+        accountLocked: editForm.accountLocked,
       });
       await refreshUsers();
       setShowEditModal(null);
@@ -915,12 +919,45 @@ function UserFormFields<T extends Omit<UserFormState, "password"> | UserFormStat
         </select>
       </div>
 
+      {Boolean(form.accountLocked) && (
+        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-3.5 text-red-700">
+          <div className="flex items-center gap-2.5">
+            <span className="material-symbols-outlined text-[20px] text-red-600">lock</span>
+            <div>
+              <p className="text-xs font-bold">Account Locked</p>
+              <p className="text-[11px] text-red-600">Locked due to failed login attempts</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              updateForm("accountLocked", false as T["accountLocked"]);
+              updateForm("isActive", true as T["isActive"]);
+            }}
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-red-700 transition-colors cursor-pointer"
+          >
+            Unlock Account
+          </button>
+        </div>
+      )}
+
       <button
         type="button"
-        onClick={() => updateForm("isActive", !form.isActive as T["isActive"])}
-        className="flex w-full items-center justify-between rounded-lg py-2 text-left"
+        onClick={() => {
+          const nextActive = !form.isActive;
+          updateForm("isActive", nextActive as T["isActive"]);
+          if (nextActive) {
+            updateForm("accountLocked", false as T["accountLocked"]);
+          }
+        }}
+        className="flex w-full items-center justify-between rounded-lg py-2 text-left cursor-pointer"
       >
-        <span className="text-sm font-medium text-on-surface">Active account</span>
+        <div>
+          <span className="text-sm font-medium text-on-surface block">Active account</span>
+          {Boolean(form.accountLocked) && (
+            <span className="text-[11px] text-red-600 font-semibold">Toggling ON will unlock this account</span>
+          )}
+        </div>
         <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.isActive ? "bg-primary" : "bg-outline-variant"}`}>
           <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${form.isActive ? "translate-x-6" : "translate-x-1"}`} />
         </span>

@@ -277,9 +277,11 @@ export default function AdminKnowledgeBasePage() {
             <span className="material-symbols-outlined text-primary">rate_review</span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-on-surface">15</span>
-            <span className="bg-error-container text-on-error-container px-2 py-0.5 rounded text-[10px] font-bold">
-              URGENT
+            <span className="text-3xl font-bold text-on-surface">
+              {articles.filter((a) => a.isOutdated).length}
+            </span>
+            <span className="text-xs font-bold text-error bg-error/10 px-2 py-0.5 rounded">
+              Outdated content
             </span>
           </div>
         </div>
@@ -468,7 +470,7 @@ export default function AdminKnowledgeBasePage() {
                       </span>
                     </td>
                     <td className="px-6 py-5 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

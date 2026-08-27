@@ -27,6 +27,24 @@ export default function KnowledgeBasePage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [selectedArticle, setSelectedArticle] = useState<KnowledgeBaseArticleRecord | null>(null);
   const [helpfulFeedback, setHelpfulFeedback] = useState<Record<string, "yes" | "no">>({});
+  const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const toggleBookmark = (id: string, title: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setBookmarks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        setToastMessage(`Removed "${title}" from bookmarked articles.`);
+      } else {
+        next.add(id);
+        setToastMessage(`Saved "${title}" to your bookmarked articles!`);
+      }
+      setTimeout(() => setToastMessage(null), 3000);
+      return next;
+    });
+  };
 
   useEffect(() => {
     fetchPublicCategories()
@@ -70,6 +88,8 @@ export default function KnowledgeBasePage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  const [showStatusModal, setShowStatusModal] = useState(false);
 
   const helpTopics = [
     {
@@ -154,7 +174,12 @@ export default function KnowledgeBasePage() {
         <section className="max-w-[1440px] mx-auto px-container-margin -mt-12 relative z-20">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Card 1: Browse Knowledge Base */}
-            <div className="bg-white/80 backdrop-blur-md border border-slate-200/80 p-8 rounded-xl shadow-md hover:shadow-lg transition-all group cursor-pointer">
+            <div
+              onClick={() => {
+                document.getElementById("articles-section")?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="bg-white/80 backdrop-blur-md border border-slate-200/80 p-8 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 transition-all group cursor-pointer"
+            >
               <div className="w-12 h-12 bg-primary-container/10 text-primary rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                 <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
                   menu_book
@@ -170,7 +195,10 @@ export default function KnowledgeBasePage() {
             </div>
 
             {/* Card 2: Check System Status */}
-            <div className="bg-white/80 backdrop-blur-md border border-slate-200/80 border-t-4 border-t-primary p-8 rounded-xl shadow-md hover:shadow-lg transition-all group cursor-pointer">
+            <div
+              onClick={() => setShowStatusModal(true)}
+              className="bg-white/80 backdrop-blur-md border border-slate-200/80 border-t-4 border-t-primary p-8 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 transition-all group cursor-pointer"
+            >
               <div className="w-12 h-12 bg-primary-container/10 text-primary rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                 <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
                   analytics
@@ -189,7 +217,7 @@ export default function KnowledgeBasePage() {
             {/* Card 3: Contact Support */}
             <Link
               href="/customer/support"
-              className="bg-white/80 backdrop-blur-md border border-slate-200/80 p-8 rounded-xl shadow-md hover:shadow-lg transition-all group cursor-pointer block"
+              className="bg-white/80 backdrop-blur-md border border-slate-200/80 p-8 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 transition-all group cursor-pointer block"
             >
               <div className="w-12 h-12 bg-primary-container/10 text-primary rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                 <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
@@ -208,7 +236,7 @@ export default function KnowledgeBasePage() {
         </section>
 
         {/* ── KNOWLEDGE BASE ARTICLES SECTION ── */}
-        <section className="py-20 max-w-[1440px] mx-auto px-container-margin">
+        <section id="articles-section" className="py-20 max-w-[1440px] mx-auto px-container-margin">
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
             <div>
               <div className="flex items-center gap-2 text-primary font-bold text-label-md uppercase tracking-wider mb-2">
@@ -277,20 +305,37 @@ export default function KnowledgeBasePage() {
                     ? "bg-emerald-100 text-emerald-800 border-emerald-200"
                     : "bg-slate-100 text-slate-800 border-slate-200";
 
+                const readTime = `${Math.max(2, Math.ceil((art.content?.length || 250) / 300))} min read`;
+                const isBookmarked = bookmarks.has(art.id);
+
                 return (
                   <div
                     key={art.id}
                     onClick={() => setSelectedArticle(art)}
-                    className="bg-white border border-outline-variant rounded-xl p-6 shadow-xs hover:shadow-md hover:border-primary/50 transition-all cursor-pointer flex flex-col justify-between group"
+                    className="bg-white border border-outline-variant rounded-xl p-6 shadow-xs hover:shadow-md hover:border-primary/50 transition-all cursor-pointer flex flex-col justify-between group relative"
                   >
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-3">
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeStyle}`}>
-                          {art.category || "Troubleshooting"}
-                        </span>
-                        <span className="font-code text-xs text-outline font-semibold">
-                          #{art.slug ? art.slug.slice(art.slug.lastIndexOf("-") + 1).toUpperCase() : art.id.slice(0, 8)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeStyle}`}>
+                            {art.category || "Troubleshooting"}
+                          </span>
+                          <span className="text-[11px] font-semibold text-outline bg-surface-container px-2 py-0.5 rounded flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[13px]">schedule</span>
+                            {readTime}
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => toggleBookmark(art.id, art.title, e)}
+                          className={`p-1 rounded-md transition-colors cursor-pointer ${
+                            isBookmarked ? "text-amber-500 bg-amber-50" : "text-outline hover:text-primary hover:bg-surface-container"
+                          }`}
+                          title={isBookmarked ? "Remove Bookmark" : "Save Article"}
+                        >
+                          <span className="material-symbols-outlined text-[18px]">
+                            {isBookmarked ? "bookmark_added" : "bookmark"}
+                          </span>
+                        </button>
                       </div>
                       <h3 className="font-headline-md text-[18px] text-on-surface font-bold group-hover:text-primary transition-colors mb-2 line-clamp-2">
                         {art.title}
@@ -491,44 +536,140 @@ export default function KnowledgeBasePage() {
               </div>
 
               {/* Helpful Feedback Bar */}
-              <div className="mt-8 pt-6 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface-container-lowest p-4 rounded-xl">
-                <p className="text-body-md font-semibold text-on-surface">
-                  Was this article helpful?
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() =>
-                      setHelpfulFeedback((prev) => ({
-                        ...prev,
-                        [selectedArticle.id]: "yes",
-                      }))
-                    }
-                    className={`px-4 py-1.5 rounded-lg border text-label-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                      helpfulFeedback[selectedArticle.id] === "yes"
-                        ? "bg-green-600 text-white border-green-600"
-                        : "border-outline-variant text-on-surface hover:bg-green-50 hover:text-green-700 hover:border-green-300"
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[18px]">thumb_up</span>
-                    <span>Yes</span>
-                  </button>
-                  <button
-                    onClick={() =>
-                      setHelpfulFeedback((prev) => ({
-                        ...prev,
-                        [selectedArticle.id]: "no",
-                      }))
-                    }
-                    className={`px-4 py-1.5 rounded-lg border text-label-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                      helpfulFeedback[selectedArticle.id] === "no"
-                        ? "bg-red-600 text-white border-red-600"
-                        : "border-outline-variant text-on-surface hover:bg-red-50 hover:text-red-700 hover:border-red-300"
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[18px]">thumb_down</span>
-                    <span>No</span>
-                  </button>
+              <div className="mt-8 pt-6 border-t border-outline-variant bg-surface-container-lowest p-4 rounded-xl flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <p className="text-body-md font-semibold text-on-surface">
+                    Was this article helpful?
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() =>
+                        setHelpfulFeedback((prev) => ({
+                          ...prev,
+                          [selectedArticle.id]: "yes",
+                        }))
+                      }
+                      className={`px-4 py-1.5 rounded-lg border text-label-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        helpfulFeedback[selectedArticle.id] === "yes"
+                          ? "bg-green-600 text-white border-green-600"
+                          : "border-outline-variant text-on-surface hover:bg-green-50 hover:text-green-700 hover:border-green-300"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">thumb_up</span>
+                      <span>Yes</span>
+                    </button>
+                    <button
+                      onClick={() =>
+                        setHelpfulFeedback((prev) => ({
+                          ...prev,
+                          [selectedArticle.id]: "no",
+                        }))
+                      }
+                      className={`px-4 py-1.5 rounded-lg border text-label-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        helpfulFeedback[selectedArticle.id] === "no"
+                          ? "bg-red-600 text-white border-red-600"
+                          : "border-outline-variant text-on-surface hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">thumb_down</span>
+                      <span>No</span>
+                    </button>
+                  </div>
                 </div>
+
+                {helpfulFeedback[selectedArticle.id] === "no" && (
+                  <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-center justify-between gap-3 text-xs text-amber-900 animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-amber-600 text-sm">info</span>
+                      <span>Sorry this guide didn&apos;t answer your question. Need further assistance?</span>
+                    </div>
+                    <CreateTicketTrigger className="px-3 py-1 bg-amber-600 text-white font-bold rounded hover:bg-amber-700 transition-colors whitespace-nowrap cursor-pointer">
+                      Submit Support Ticket
+                    </CreateTicketTrigger>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── SYSTEM STATUS MODAL ── */}
+        {showStatusModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+            onClick={() => setShowStatusModal(false)}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-outline-variant p-6 md:p-8 relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-4 pb-4 border-b border-outline-variant mb-6">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+                  <h3 className="font-bold text-headline-sm text-on-surface">Kinetic Global System Status</h3>
+                </div>
+                <button
+                  onClick={() => setShowStatusModal(false)}
+                  className="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
+              </div>
+
+              <div className="space-y-4 mb-6">
+                <div className="flex items-center justify-between p-3.5 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-green-600">dns</span>
+                    <div>
+                      <p className="font-bold text-body-md text-green-900">API Gateway & REST Routes</p>
+                      <p className="text-xs text-green-700">Port 8000 • Response time ~12ms</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-200 text-green-900">Operational</span>
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-green-600">database</span>
+                    <div>
+                      <p className="font-bold text-body-md text-green-900">PostgreSQL Engine (Local)</p>
+                      <p className="text-xs text-green-700">Port 5431 • db_tms active</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-200 text-green-900">Operational</span>
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-green-600">sync_alt</span>
+                    <div>
+                      <p className="font-bold text-body-md text-green-900">Realtime Socket.io Gateway</p>
+                      <p className="text-xs text-green-700">Live ticket updates & notifications</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-200 text-green-900">Operational</span>
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-green-600">verified_user</span>
+                    <div>
+                      <p className="font-bold text-body-md text-green-900">Auth & Google OAuth</p>
+                      <p className="text-xs text-green-700">JWT Token verification active</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-200 text-green-900">Operational</span>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-outline-variant">
+                <button
+                  type="button"
+                  onClick={() => setShowStatusModal(false)}
+                  className="px-5 py-2 rounded-lg bg-primary font-bold text-white shadow-xs hover:opacity-90 transition-all cursor-pointer"
+                >
+                  Close Status
+                </button>
               </div>
             </div>
           </div>

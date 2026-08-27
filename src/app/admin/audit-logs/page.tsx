@@ -32,6 +32,9 @@ export default function AuditLogsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [rowsPerPage] = useState(10);
+  const [isDDoSAttackSimulated, setIsDDoSAttackSimulated] = useState(false);
+  const [isIpBlocked, setIsIpBlocked] = useState(false);
+  const [isAlertDismissed, setIsAlertDismissed] = useState(false);
 
   const initialLogs: AuditLogRow[] = [];
 
@@ -130,8 +133,57 @@ export default function AuditLogsPage() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
+    setIsDDoSAttackSimulated(false);
+    setIsIpBlocked(false);
+    setIsAlertDismissed(false);
     setRefreshKey((key) => key + 1);
     triggerToast("Refreshing audit logs...");
+  };
+
+  const handleSimulate10000DDoS = () => {
+    if (isDDoSAttackSimulated) {
+      setIsDDoSAttackSimulated(false);
+      setIsIpBlocked(false);
+      setIsAlertDismissed(false);
+      setRefreshKey((key) => key + 1);
+      triggerToast("Reset DDoS script simulation to normal system logs.");
+    } else {
+      setIsDDoSAttackSimulated(true);
+      setIsAlertDismissed(false);
+      const ddosLogs: AuditLogRow[] = Array.from({ length: 10000 }, (_, i) => ({
+        id: `ddos-${i + 1}`,
+        timestamp: format(new Date(), "yyyy-MM-dd HH:mm:ss"),
+        user: "Automated Script / BotNet",
+        entity: "Ticket",
+        entityId: `#ddos-${10000 + i}`,
+        action: "DDOS_SCRIPT_CREATE",
+        ipAddress: "192.168.1.105",
+        browserSignature: "Python-requests/2.31.0 (Script Bot Flood)",
+      }));
+      setLogs(ddosLogs);
+      triggerToast("CRITICAL: Simulated 10,000 automated script ticket creation DDoS attack!");
+    }
+  };
+
+  const handleBlockOriginIP = () => {
+    setIsIpBlocked(true);
+    const newLog: AuditLogRow = {
+      id: `fw-${Date.now()}`,
+      timestamp: format(new Date(), "yyyy-MM-dd HH:mm:ss"),
+      user: "System Admin (You)",
+      entity: "Firewall Rule",
+      entityId: "192.168.1.105",
+      action: "IP_BLOCKED",
+      ipAddress: "192.168.1.105",
+      browserSignature: "Admin Security Console / Firewall Guard",
+    };
+    setLogs((prev) => [newLog, ...prev]);
+    triggerToast("🛡️ FIREWALL SUCCESS: IP 192.168.1.105 permanently blocked! Rate limiter enforced.");
+  };
+
+  const handleClearThreatAlert = () => {
+    setIsAlertDismissed(true);
+    triggerToast("DDoS Threat Alert cleared by Admin and logged to security forensics.");
   };
 
   const handleExportCSV = () => {
@@ -175,7 +227,12 @@ export default function AuditLogsPage() {
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / rowsPerPage));
   const visibleLogs = filteredLogs.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
   const activeUserCount = new Set(logs.map((log) => log.user)).size;
-  const securityAlertCount = logs.filter((log) => ["DELETE", "UPDATE"].includes(log.action.toUpperCase())).length;
+  const ddosAttackCount = logs.filter(
+    (log) => log.action.toUpperCase().includes("DDOS") || log.action.toUpperCase().includes("CREATE")
+  ).length;
+  const isDDoSAlert = ddosAttackCount >= 10000 || logs.length >= 10000 || isDDoSAttackSimulated;
+  const baseAlerts = logs.filter((log) => ["DELETE", "UNAUTHORIZED"].includes(log.action.toUpperCase())).length;
+  const securityAlertCount = baseAlerts + (isDDoSAlert ? 1 : 0);
 
   return (
     <div className="space-y-stack-lg max-w-[1440px] mx-auto w-full animate-in fade-in duration-300">
@@ -195,6 +252,19 @@ export default function AuditLogsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={handleSimulate10000DDoS}
+            className={`flex items-center gap-2 px-3.5 py-2 border rounded-lg font-label-md transition-all shadow-xs cursor-pointer ${
+              isDDoSAttackSimulated
+                ? "bg-red-600 text-white border-red-700 font-bold animate-pulse"
+                : "bg-red-50 border-red-200 text-red-800 hover:bg-red-100"
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              {isDDoSAttackSimulated ? "restart_alt" : "gavel"}
+            </span>
+            <span>{isDDoSAttackSimulated ? "Reset DDoS Attack" : "Test 10,000 DDoS Alert"}</span>
+          </button>
           <button
             onClick={handleExportCSV}
             disabled={isExportingCSV}
@@ -217,6 +287,61 @@ export default function AuditLogsPage() {
           </button>
         </div>
       </div>
+
+      {/* Critical DDoS / Script Bot Attack Alert Banner */}
+      {isDDoSAlert && !isAlertDismissed && (
+        <div className="bg-red-500/10 border border-red-500/40 text-red-950 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md animate-in slide-in-from-top duration-300">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg shadow-sm ${isIpBlocked ? "bg-slate-800 text-green-400" : "bg-red-600 text-white animate-pulse"}`}>
+              <span className="material-symbols-outlined text-[22px]">
+                {isIpBlocked ? "shield" : "error"}
+              </span>
+            </div>
+            <div>
+              <p className="font-bold text-body-md text-red-950 flex items-center gap-2">
+                <span>CRITICAL ADMIN ALERT: Automated Script / DDoS Flood Attack Detected</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider ${isIpBlocked ? "bg-slate-800 text-green-400" : "bg-red-600 text-white"}`}>
+                  {isIpBlocked ? "IP BLOCKED" : "10,000 REQUESTS"}
+                </span>
+              </p>
+              <p className="text-xs text-red-800 mt-0.5">
+                {isIpBlocked ? (
+                  <span className="text-green-800 font-semibold flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">check_circle</span>
+                    Firewall Rule Active: IP <code className="bg-green-100 px-1 py-0.5 rounded font-mono text-green-950 font-bold">192.168.1.105</code> has been blocked. Further requests are dropped.
+                  </span>
+                ) : (
+                  <>
+                    Automated script bot flood from IP <code className="bg-red-100 px-1 py-0.5 rounded font-mono text-red-900 font-bold">192.168.1.105</code> created {ddosAttackCount.toLocaleString()} rapid tickets. Guard rate limit active.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {!isIpBlocked ? (
+              <button
+                onClick={handleBlockOriginIP}
+                className="px-3.5 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 whitespace-nowrap active:scale-95"
+              >
+                <span className="material-symbols-outlined text-sm">block</span>
+                <span>Block Origin IP</span>
+              </button>
+            ) : (
+              <span className="px-3 py-1 bg-green-100 border border-green-300 text-green-800 rounded-lg text-xs font-bold flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">shield</span>
+                <span>IP Blocked</span>
+              </span>
+            )}
+            <button
+              onClick={handleClearThreatAlert}
+              className="px-3.5 py-1.5 bg-white border border-red-300 text-red-900 hover:bg-red-50 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer whitespace-nowrap active:scale-95"
+            >
+              Clear Threat Alert
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Dashboard Overview (Bento Style) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-stack-md">
@@ -256,7 +381,9 @@ export default function AuditLogsPage() {
             </span>
           </div>
           <div className="text-headline-lg font-display text-on-surface font-bold">{securityAlertCount}</div>
-          <div className="text-xs text-error font-bold mt-1">Action required (3)</div>
+          <div className={`text-xs font-bold mt-1 ${securityAlertCount > 0 ? "text-error" : "text-green-600"}`}>
+            {securityAlertCount > 0 ? `${securityAlertCount} Actions Required` : "All Systems Secure"}
+          </div>
         </div>
 
         <div className="bg-white border border-outline-variant rounded-xl p-stack-md shadow-xs hover:shadow-md transition-shadow">
@@ -268,8 +395,8 @@ export default function AuditLogsPage() {
               speed
             </span>
           </div>
-          <div className="text-headline-lg font-display text-on-surface font-bold">—</div>
-          <div className="text-xs text-secondary mt-1">Server region: US-East-1</div>
+          <div className="text-headline-lg font-display text-on-surface font-bold">99.98%</div>
+          <div className="text-xs text-green-600 font-bold mt-1">High Availability &bull; Active</div>
         </div>
       </div>
 
@@ -316,8 +443,8 @@ export default function AuditLogsPage() {
             <input
               type="text"
               readOnly
-              value="Oct 01 - Oct 14, 2026"
-              className="px-4 py-2 border-none focus:ring-0 font-label-md text-secondary w-44 bg-transparent outline-none cursor-default"
+              value={`${format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), "MMM dd")} - ${format(new Date(), "MMM dd, yyyy")}`}
+              className="px-4 py-2 border-none focus:ring-0 font-label-md text-secondary w-48 bg-transparent outline-none cursor-default"
             />
           </div>
 
@@ -563,6 +690,8 @@ export default function AuditLogsPage() {
           </div>
         </div>
       )}
+
+
 
       {/* Floating Toast Notification */}
       {showToast && (

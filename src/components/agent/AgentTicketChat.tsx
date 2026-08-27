@@ -1,26 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import toast from "react-hot-toast";
 import { useAppSelector } from "@/src/store/hooks";
 import { selectUser } from "@/src/store/slices/authSlice";
 import {
   fetchTicketComments,
   createTicketComment,
+  uploadTicketAttachment,
   TicketComment,
   TicketCommentUser,
 } from "@/src/services/portalService";
 import type { AgentTicketAttachment } from "@/src/constants/agentTicketDetail";
 import { format } from "date-fns";
-import { Loader2 } from "lucide-react";
 import {
-  Bold,
-  Italic,
-  Link as LinkIcon,
-  List,
-  Code,
-  Paperclip,
-  Smile,
-  AtSign,
-  Send,
+  Loader2,
   FileText,
   ExternalLink,
   Download,
@@ -99,6 +92,11 @@ export function AgentTicketChat({
   const currentUser = useAppSelector(selectUser);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
+
   const isFirstLoadRef = useRef(true);
   const userScrolledUpRef = useRef(false);
   const storageKey = `agentTicketChat_${ticketId}`;
@@ -109,6 +107,80 @@ export function AgentTicketChat({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeImageModal, setActiveImageModal] = useState<{ url: string; name: string } | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [uploadStatusMsg, setUploadStatusMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const insertFormatting = (prefix: string, suffix: string = "", defaultText: string = "") => {
+    const textarea = textareaRef.current;
+    const currentReply = reply;
+
+    let start = currentReply.length;
+    let end = currentReply.length;
+
+    if (textarea) {
+      start = textarea.selectionStart ?? currentReply.length;
+      end = textarea.selectionEnd ?? currentReply.length;
+    }
+
+    const selected = currentReply.substring(start, end);
+    const textToInsert = selected.length > 0 ? selected : defaultText;
+    const replacement = `${prefix}${textToInsert}${suffix}`;
+    const newText = currentReply.substring(0, start) + replacement + currentReply.substring(end);
+
+    setReply(newText);
+
+    requestAnimationFrame(() => {
+      if (textarea) {
+        textarea.focus();
+        if (selected.length > 0) {
+          textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+        } else {
+          const newCursorPos = start + prefix.length + textToInsert.length + suffix.length;
+          textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }
+      }
+    });
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, isImgOnly = false) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !currentUser?.id) return;
+    const file = files[0];
+
+    setIsUploadingFile(true);
+    setUploadStatusMsg(`Uploading ${file.name}...`);
+    try {
+      await uploadTicketAttachment(ticketId, currentUser.id, file);
+      setUploadStatusMsg(`Attached ${file.name}`);
+      toast.success(`Attached ${file.name}`);
+      setTimeout(() => setUploadStatusMsg(null), 3500);
+
+      const attachmentMarkdown = isImgOnly
+        ? `\n![${file.name}](Image: ${file.name})\n`
+        : `\n[📎 ${file.name}]\n`;
+      setReply((prev) => prev + attachmentMarkdown);
+
+      void loadMessages();
+    } catch (err) {
+      console.error("Failed to upload attachment", err);
+      toast.error("Failed to upload attachment. Please try again.");
+      setUploadStatusMsg(null);
+    } finally {
+      setIsUploadingFile(false);
+      e.target.value = "";
+    }
+  };
 
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
@@ -222,6 +294,7 @@ export function AgentTicketChat({
       });
 
       setReply("");
+      toast.success("Message sent successfully!");
 
       const message: TicketChatMessage = {
         id: createdComment?.id || `local-${Date.now()}`,
@@ -412,56 +485,163 @@ export function AgentTicketChat({
 
       {/* Reply input section */}
       <div className="border-t border-outline-variant bg-surface-container-low p-3">
-        <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-sm">
-          <div className="flex items-center gap-1 border-b border-outline-variant bg-surface-container-low px-3 py-1.5">
-            <button type="button" aria-label="Bold" title="Bold" className="rounded p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high">
-              <Bold aria-hidden className="size-4" />
+        <div className="overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-lowest shadow-sm">
+          {/* Hidden File Inputs */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={(e) => void handleFileSelect(e, false)}
+            className="hidden"
+          />
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => void handleFileSelect(e, true)}
+            className="hidden"
+          />
+
+          {/* Top Toolbar (Formatting) */}
+          <div className="flex items-center gap-1.5 border-b border-outline-variant bg-surface-container-low/50 px-3 py-2 text-sm text-on-surface-variant font-medium">
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => insertFormatting("**", "**", "bold text")}
+              title="Bold"
+              className="rounded px-2 py-0.5 font-serif font-bold transition-colors hover:bg-surface-container-high hover:text-on-surface cursor-pointer"
+            >
+              B
             </button>
-            <button type="button" aria-label="Italic" title="Italic" className="rounded p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high">
-              <Italic aria-hidden className="size-4" />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => insertFormatting("*", "*", "italic text")}
+              title="Italic"
+              className="rounded px-2 py-0.5 font-serif italic transition-colors hover:bg-surface-container-high hover:text-on-surface cursor-pointer"
+            >
+              I
             </button>
-            <button type="button" aria-label="Link" title="Link" className="rounded p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high">
-              <LinkIcon aria-hidden className="size-4" />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => insertFormatting("[", "](https://example.com)", "link title")}
+              title="Insert Link"
+              className="flex items-center rounded p-1 transition-colors hover:bg-surface-container-high hover:text-on-surface cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">link</span>
             </button>
-            <div className="mx-1 h-4 w-px bg-outline-variant" aria-hidden />
-            <button type="button" aria-label="List" title="List" className="rounded p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high">
-              <List aria-hidden className="size-4" />
+
+            <div className="mx-1 h-4 w-px bg-outline-variant" />
+
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => insertFormatting("\n- ", "", "list item")}
+              title="Bulleted List"
+              className="flex items-center rounded p-1 transition-colors hover:bg-surface-container-high hover:text-on-surface cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">format_list_bulleted</span>
             </button>
-            <button type="button" aria-label="Code" title="Code" className="rounded p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high">
-              <Code aria-hidden className="size-4" />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => insertFormatting("`", "`", "code")}
+              title="Inline Code"
+              className="rounded px-1.5 py-0.5 font-mono text-xs transition-colors hover:bg-surface-container-high hover:text-on-surface cursor-pointer"
+            >
+              &lt;&gt;
             </button>
+
+            {uploadStatusMsg && (
+              <span className="ml-auto flex items-center gap-1 text-xs font-bold text-primary animate-pulse">
+                {isUploadingFile && <Loader2 className="size-3 animate-spin" />}
+                {uploadStatusMsg}
+              </span>
+            )}
           </div>
 
           <textarea
+            ref={textareaRef}
             value={reply}
             onChange={(event) => setReply(event.target.value)}
             onKeyDown={handleKeyDown}
-            rows={2}
+            rows={3}
             placeholder="Type your reply here... (Ctrl + Enter to send)"
-            className="min-h-[64px] w-full resize-none border-none bg-transparent px-4 py-2.5 text-body-md placeholder:text-outline outline-none focus:ring-0"
+            className="min-h-[85px] w-full resize-none border-none bg-transparent px-4 py-3 text-body-md placeholder:text-outline outline-none focus:ring-0"
           />
 
-          <div className="flex items-center justify-between border-t border-outline-variant bg-surface-container-lowest px-3 py-2">
-            <div className="flex items-center gap-1">
-              <button type="button" aria-label="Attach file" className="rounded-full p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container">
-                <Paperclip aria-hidden className="size-4" />
+          {/* Bottom Bar / Action Footer */}
+          <div className="relative flex items-center justify-between border-t border-outline-variant bg-surface-container-lowest p-3 px-4">
+            <div className="relative flex items-center gap-2" ref={emojiRef}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingFile}
+                title="Attach File"
+                className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary cursor-pointer disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[20px]">attach_file</span>
               </button>
-              <button type="button" aria-label="Add emoji" className="rounded-full p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container">
-                <Smile aria-hidden className="size-4" />
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setShowEmojiPicker((prev) => !prev)}
+                title="Insert Emoji"
+                className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-amber-500 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[20px]">sentiment_satisfied</span>
               </button>
-              <button type="button" aria-label="Mention customer" className="rounded-full p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container">
-                <AtSign aria-hidden className="size-4" />
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertFormatting("@customer ", "", "")}
+                title="Mention Customer"
+                className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[20px]">alternate_email</span>
               </button>
+
+              {/* Floating Emoji Picker */}
+              {showEmojiPicker && (
+                <div className="absolute bottom-12 left-0 z-30 grid w-64 grid-cols-6 gap-2 rounded-2xl border border-outline-variant bg-surface-container-lowest p-3 text-xl shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                  {["😊", "👍", "🎉", "🙏", "🚀", "❤️", "💡", "🐛", "💬", "⚡", "✅", "⭐"].map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        insertFormatting(emoji, "", "");
+                        setShowEmojiPicker(false);
+                      }}
+                      className="rounded-xl p-2 text-center transition-transform hover:scale-125 hover:bg-surface-container-high cursor-pointer"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <button
               type="button"
               onClick={() => void handleSend()}
               disabled={!reply.trim() || sending}
-              className="flex items-center gap-2 rounded-lg bg-primary px-5 py-1.5 text-sm font-bold text-white shadow-xs transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2 text-body-md font-bold text-on-primary shadow-sm transition-all hover:brightness-110 active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {sending ? <Loader2 className="size-4 animate-spin" /> : "Send Message"}
-              {!sending && <Send aria-hidden className="size-4" />}
+              {sending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Sending...</span>
+                </>
+              ) : (
+                <>
+                  <span>Send Message</span>
+                  <span className="material-symbols-outlined text-[18px]">send</span>
+                </>
+              )}
             </button>
           </div>
         </div>
