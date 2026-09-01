@@ -170,6 +170,64 @@ function buildPerformance(
 }
 
 export async function fetchAgentReportAnalytics(currentUserId?: string): Promise<AgentReportAnalytics> {
+  try {
+    const { data } = await api.get("/reports/analytics?period=30");
+    const analytics = data?.data;
+    if (analytics) {
+      const avgRes = analytics.avgResolutionHours !== null ? String(analytics.avgResolutionHours) : "—";
+      const slaComp = analytics.slaCompliance !== null ? analytics.slaCompliance : "—";
+
+      return {
+        kpis: [
+          {
+            label: "Tickets Resolved",
+            value: analytics.resolvedCount ?? 0,
+            footer: "Resolved or closed in the last 30 days",
+          },
+          {
+            label: "Avg. Resolution Time",
+            value: avgRes,
+            valueSuffix: avgRes === "—" ? undefined : " hrs",
+            footer: analytics.resolutionSampleCount
+              ? `Based on ${analytics.resolutionSampleCount} tickets`
+              : "Based on database analytics",
+            badge: "API",
+            badgeColor: "blue",
+          },
+          {
+            label: "Customer Rating",
+            value: analytics.avgRating !== null && analytics.avgRating !== undefined ? String(analytics.avgRating) : "—",
+            valueSuffix: analytics.avgRating !== null && analytics.avgRating !== undefined ? " / 5.0" : undefined,
+            footer: analytics.ratedCount
+              ? `Based on ${analytics.ratedCount} customer review${analytics.ratedCount > 1 ? "s" : ""}`
+              : "No customer reviews submitted yet",
+            badge: analytics.ratedCount ? "API" : undefined,
+            badgeColor: "green",
+            icon: "star",
+          },
+          {
+            label: "SLA Compliance",
+            value: slaComp,
+            valueSuffix: slaComp === "—" ? undefined : "%",
+            footer: analytics.slaTicketCount
+              ? `Based on ${analytics.slaTicketCount} tickets`
+              : "No SLA target data available",
+            badge: "API",
+            badgeColor: "green",
+            icon: "verified",
+          },
+        ],
+        volumeWeeks: analytics.volumeWeeks ?? [],
+        categories: analytics.categories ?? [],
+        performance: analytics.performance ?? [],
+        contributors: analytics.contributors ?? [],
+      };
+    }
+  } catch (err) {
+    console.warn("Backend analytics API call failed, falling back to local computation:", err);
+  }
+
+  // Fallback to local computation if API unavailable
   const [ticketResponse, users] = await Promise.all([
     fetchQueueTickets({ limit: 500 }),
     adminUserService.getUsers(),
@@ -244,6 +302,7 @@ export interface AdminReportAnalytics {
   totalTickets: number;
   slaCompliance: number | null;
   averageResolutionHours: number | null;
+  avgRating?: number | null;
   volume: Array<{ label: string; newTickets: number; resolved: number }>;
   departmentPerformance: Array<{ department: string; percentage: number }>;
   slaByPriority: Array<{ priority: string; met: number; breached: number; successRate: number | null }>;
@@ -414,12 +473,18 @@ export async function fetchAdminReportAnalytics(
     };
   });
 
+  const ratedTickets = tickets.filter((t) => (t as any).rating !== null && (t as any).rating !== undefined && (t as any).rating > 0);
+  const avgRating = ratedTickets.length > 0
+    ? parseFloat((ratedTickets.reduce((sum, t) => sum + ((t as any).rating || 0), 0) / ratedTickets.length).toFixed(1))
+    : null;
+
   return {
     totalTickets: tickets.length,
     slaCompliance: slaTickets.length ? Math.round((slaMet / slaTickets.length) * 100) : 96,
     averageResolutionHours: resolutionHours.length
       ? resolutionHours.reduce((sum, hours) => sum + hours, 0) / resolutionHours.length
       : null,
+    avgRating,
     volume,
     departmentPerformance,
     slaByPriority,

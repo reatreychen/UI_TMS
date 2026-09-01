@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { CreateTicketTrigger } from "./CreateTicketModal";
 import { NotificationBell } from "@/src/components/NotificationBell";
@@ -26,6 +26,7 @@ export type ActivePage =
 
 export function TopNav({ activePage }: { activePage?: ActivePage }) {
   const pathname = usePathname() || "";
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const currentUser = useAppSelector(selectUser);
@@ -60,6 +61,7 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
   const handleLogout = () => {
     setIsMenuOpen(false);
     dispatch(logout());
+    router.push("/login");
   };
 
   const getProfileHref = () => {
@@ -246,27 +248,31 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
                       View Profile
                     </Link>
 
-                    <Link
-                      href={getDashboardHref()}
-                      onClick={() => setIsMenuOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-on-surface hover:bg-surface-container-low transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-primary text-[18px]">
-                        dashboard
-                      </span>
-                      Dashboard
-                    </Link>
+                    {userRole?.toLowerCase() !== "customer" && userRole?.toLowerCase() !== "user" && (
+                      <Link
+                        href={getDashboardHref()}
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-on-surface hover:bg-surface-container-low transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-primary text-[18px]">
+                          dashboard
+                        </span>
+                        Dashboard
+                      </Link>
+                    )}
                     
-                    <Link
-                      href={getMyTicketsHref()}
-                      onClick={() => setIsMenuOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-on-surface hover:bg-surface-container-low transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-primary text-[18px]">
-                        confirmation_number
-                      </span>
-                      My Tickets
-                    </Link>
+                    {userRole?.toLowerCase() !== "admin" && (
+                      <Link
+                        href={getMyTicketsHref()}
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-on-surface hover:bg-surface-container-low transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-primary text-[18px]">
+                          confirmation_number
+                        </span>
+                        My Tickets
+                      </Link>
+                    )}
 
                     <div className="border-t border-outline-variant/60 my-1" />
 

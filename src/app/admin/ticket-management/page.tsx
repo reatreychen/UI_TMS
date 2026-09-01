@@ -270,18 +270,25 @@ export default function TicketManagementPage() {
           let list = data.agents || [];
           if (list.length === 0) {
             const users = await adminUserService.getUsers();
-            list = users.map(
-              (u) =>
-                ({
-                  id: u.id,
-                  name: u.fullName,
-                  email: u.email,
-                  role: u.jobTitle || "Support Agent",
-                  status: u.isActive ? "Online" : "Offline",
-                  activeTickets: 0,
-                  capacityPct: 0,
-                } as AgentRecord)
-            );
+            list = users
+              .filter((u) => {
+                const r = (typeof u.role === "object" && u.role ? (u.role as any).name : typeof u.role === "string" ? u.role : u.jobTitle || "").toLowerCase();
+                const fn = (u.fullName || "").toLowerCase();
+                const em = (u.email || "").toLowerCase();
+                return !r.includes("customer") && !fn.includes("customer") && !em.includes("customer") && r !== "user";
+              })
+              .map(
+                (u) =>
+                  ({
+                    id: u.id,
+                    name: u.fullName,
+                    email: u.email,
+                    role: u.jobTitle || "Support Agent",
+                    status: u.isActive ? "Online" : "Offline",
+                    activeTickets: 0,
+                    capacityPct: 0,
+                  } as AgentRecord)
+              );
           }
           if (!cancelled) {
             setAvailableAgents(list);
@@ -292,18 +299,25 @@ export default function TicketManagementPage() {
         } catch {
           try {
             const users = await adminUserService.getUsers();
-            const list = users.map(
-              (u) =>
-                ({
-                  id: u.id,
-                  name: u.fullName,
-                  email: u.email,
-                  role: u.jobTitle || "Support Agent",
-                  status: u.isActive ? "Online" : "Offline",
-                  activeTickets: 0,
-                  capacityPct: 0,
-                } as AgentRecord)
-            );
+            const list = users
+              .filter((u) => {
+                const r = (typeof u.role === "object" && u.role ? (u.role as any).name : typeof u.role === "string" ? u.role : u.jobTitle || "").toLowerCase();
+                const fn = (u.fullName || "").toLowerCase();
+                const em = (u.email || "").toLowerCase();
+                return !r.includes("customer") && !fn.includes("customer") && !em.includes("customer") && r !== "user";
+              })
+              .map(
+                (u) =>
+                  ({
+                    id: u.id,
+                    name: u.fullName,
+                    email: u.email,
+                    role: u.jobTitle || "Support Agent",
+                    status: u.isActive ? "Online" : "Offline",
+                    activeTickets: 0,
+                    capacityPct: 0,
+                  } as AgentRecord)
+              );
             if (!cancelled) {
               setAvailableAgents(list);
               if (list.length > 0) {
@@ -1264,74 +1278,94 @@ export default function TicketManagementPage() {
               )}
 
               {/* TAB 3: Agent Performance Analytics */}
-              {agentModalTab === "performance" && (
-                <div className="flex-1 overflow-y-auto pt-4 space-y-6 pr-1">
-                  {/* KPI Metrics Summary */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
-                      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
-                        Total Resolved
-                      </p>
-                      <p className="text-headline-md font-bold text-on-surface mt-1">173 Tickets</p>
+              {agentModalTab === "performance" && (() => {
+                const totalResolvedCount = availableAgents.reduce((sum, a) => sum + (a.performance?.ticketsResolved ?? 0), 0);
+                const validCsatAgents = availableAgents.filter((a) => a.performance?.csatScore != null);
+                const avgCsatVal = validCsatAgents.length > 0
+                  ? (validCsatAgents.reduce((sum, a) => sum + (a.performance?.csatScore ?? 0), 0) / validCsatAgents.length).toFixed(1) + " / 5.0"
+                  : "N/A";
+                const validSlaAgents = availableAgents.filter((a) => a.performance?.slaRate != null);
+                const avgSlaVal = validSlaAgents.length > 0
+                  ? (validSlaAgents.reduce((sum, a) => sum + (a.performance?.slaRate ?? 0), 0) / validSlaAgents.length).toFixed(1) + "%"
+                  : "N/A";
+                const validRespAgents = availableAgents.filter((a) => a.performance?.avgResponseTime && a.performance.avgResponseTime !== "N/A");
+                const avgResponseTimeVal = validRespAgents.length > 0 ? validRespAgents[0].performance!.avgResponseTime : "N/A";
+
+                return (
+                  <div className="flex-1 overflow-y-auto pt-4 space-y-6 pr-1">
+                    {/* KPI Metrics Summary */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
+                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                          Total Resolved
+                        </p>
+                        <p className="text-headline-md font-bold text-on-surface mt-1">
+                          {totalResolvedCount} {totalResolvedCount === 1 ? "Ticket" : "Tickets"}
+                        </p>
+                      </div>
+
+                      <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
+                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                          Avg Customer Rating (CSAT)
+                        </p>
+                        <p className="text-headline-md font-bold text-emerald-600 mt-1">{avgCsatVal}</p>
+                      </div>
+
+                      <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
+                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                          Avg Response Time
+                        </p>
+                        <p className="text-headline-md font-bold text-primary mt-1">{avgResponseTimeVal}</p>
+                      </div>
+
+                      <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
+                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                          SLA Compliance
+                        </p>
+                        <p className="text-headline-md font-bold text-indigo-600 mt-1">{avgSlaVal}</p>
+                      </div>
                     </div>
 
-                    <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
-                      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
-                        Avg Customer Rating (CSAT)
-                      </p>
-                      <p className="text-headline-md font-bold text-emerald-600 mt-1">4.85 / 5.0</p>
-                    </div>
-
-                    <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
-                      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
-                        Avg Response Time
-                      </p>
-                      <p className="text-headline-md font-bold text-primary mt-1">11m 30s</p>
-                    </div>
-
-                    <div className="p-4 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xs">
-                      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
-                        SLA Compliance
-                      </p>
-                      <p className="text-headline-md font-bold text-indigo-600 mt-1">98.4%</p>
-                    </div>
-                  </div>
-
-                  {/* Leaderboard Table */}
-                  <div className="border border-outline-variant rounded-xl overflow-hidden shadow-xs">
-                    <div className="p-3 bg-surface-bright border-b border-outline-variant font-bold text-on-surface">
-                      Agent Performance Leaderboard
-                    </div>
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-surface-container text-on-surface-variant text-[11px] uppercase tracking-wider border-b">
-                          <th className="p-3">Agent</th>
-                          <th className="p-3 text-center">Tickets Resolved</th>
-                          <th className="p-3 text-center">Customer Rating (CSAT)</th>
-                          <th className="p-3 text-center">Avg Response Time</th>
-                          <th className="p-3 text-right">SLA Rate</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-outline-variant text-body-sm">
-                        {availableAgents.map((agent) => (
-                          <tr key={agent.id} className="hover:bg-surface-container-low">
-                            <td className="p-3 font-bold text-on-surface flex items-center gap-2">
-                              <span className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
-                                {agent.initials}
-                              </span>
-                              <span>{agent.name}</span>
-                            </td>
-                            <td className="p-3 text-center font-bold">{agent.performance?.ticketsResolved || 42}</td>
-                            <td className="p-3 text-center font-bold text-emerald-600">{agent.performance?.csatScore || 4.8} / 5.0</td>
-                            <td className="p-3 text-center">{agent.performance?.avgResponseTime || "12m"}</td>
-                            <td className="p-3 text-right font-bold text-primary">{agent.performance?.slaRate || 98.2}%</td>
+                    {/* Leaderboard Table */}
+                    <div className="border border-outline-variant rounded-xl overflow-hidden shadow-xs">
+                      <div className="p-3 bg-surface-bright border-b border-outline-variant font-bold text-on-surface">
+                        Agent Performance Leaderboard
+                      </div>
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-surface-container text-on-surface-variant text-[11px] uppercase tracking-wider border-b">
+                            <th className="p-3">Agent</th>
+                            <th className="p-3 text-center">Tickets Resolved</th>
+                            <th className="p-3 text-center">Customer Rating (CSAT)</th>
+                            <th className="p-3 text-center">Avg Response Time</th>
+                            <th className="p-3 text-right">SLA Rate</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant text-body-sm">
+                          {availableAgents.map((agent) => (
+                            <tr key={agent.id} className="hover:bg-surface-container-low">
+                              <td className="p-3 font-bold text-on-surface flex items-center gap-2">
+                                <span className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
+                                  {agent.initials}
+                                </span>
+                                <span>{agent.name}</span>
+                              </td>
+                              <td className="p-3 text-center font-bold">{agent.performance?.ticketsResolved ?? 0}</td>
+                              <td className="p-3 text-center font-bold text-emerald-600">
+                                {agent.performance?.csatScore != null ? `${agent.performance.csatScore} / 5.0` : "N/A"}
+                              </td>
+                              <td className="p-3 text-center">{agent.performance?.avgResponseTime || "12m"}</td>
+                              <td className="p-3 text-right font-bold text-primary">
+                                {agent.performance?.slaRate != null ? `${agent.performance.slaRate}%` : "N/A"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Modal Footer */}
               <div className="flex items-center justify-between pt-4 mt-4 border-t border-outline-variant">

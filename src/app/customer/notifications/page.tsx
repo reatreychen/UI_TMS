@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { formatDistanceToNow, format } from "date-fns";
 import { Bell, CheckCheck, Trash2, Check, Inbox } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
+import { ProtectedRoute } from "@/src/components/auth/ProtectedRoute";
 import {
   selectNotifications,
   selectUnreadCount,
@@ -52,17 +53,18 @@ export default function CustomerNotificationsPage() {
   );
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-on-surface flex items-center gap-2">
-            <Bell className="size-6 text-primary" /> Notifications
-          </h1>
-          <p className="text-sm text-on-surface-variant mt-1">
-            Stay updated on your ticket progress and agent resolution updates.
-          </p>
-        </div>
+    <ProtectedRoute allowedRoles={["customer", "agent", "admin"]}>
+      <div className="p-6 space-y-6 max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-on-surface flex items-center gap-2">
+              <Bell className="size-6 text-primary" /> Notifications
+            </h1>
+            <p className="text-sm text-on-surface-variant mt-1">
+              Stay updated on your ticket progress and agent resolution updates.
+            </p>
+          </div>
 
         {unreadCount > 0 && (
           <button
@@ -223,5 +225,6 @@ export default function CustomerNotificationsPage() {
         </div>
       )}
     </div>
+    </ProtectedRoute>
   );
 }

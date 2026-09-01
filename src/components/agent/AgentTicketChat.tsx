@@ -19,7 +19,10 @@ import {
   Download,
   X,
   ZoomIn,
+  Sparkles,
 } from "lucide-react";
+import { aiDraftReply } from "@/src/services/aiAssistService";
+
 
 interface AgentTicketChatProps {
   ticketId: string;
@@ -110,6 +113,8 @@ export function AgentTicketChat({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [uploadStatusMsg, setUploadStatusMsg] = useState<string | null>(null);
+  const [aiDrafting, setAiDrafting] = useState(false);
+
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -625,24 +630,53 @@ export function AgentTicketChat({
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => void handleSend()}
-              disabled={!reply.trim() || sending}
-              className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2 text-body-md font-bold text-on-primary shadow-sm transition-all hover:brightness-110 active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {sending ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>Sending...</span>
-                </>
-              ) : (
-                <>
-                  <span>Send Message</span>
-                  <span className="material-symbols-outlined text-[18px]">send</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* AI Draft Reply button */}
+              <button
+                type="button"
+                id="ai-draft-reply-btn"
+                disabled={aiDrafting || sending}
+                onClick={async () => {
+                  setAiDrafting(true);
+                  const draft = await aiDraftReply(ticketId);
+                  setAiDrafting(false);
+                  if (draft) {
+                    setReply(draft);
+                    textareaRef.current?.focus();
+                    toast.success("AI draft ready — review and edit before sending!");
+                  } else {
+                    toast.error("AI draft failed. Please check your Gemini API key.");
+                  }
+                }}
+                title="Generate AI draft reply"
+                className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-3 py-2 text-label-md font-semibold text-primary transition-all hover:bg-primary/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+              >
+                {aiDrafting ? (
+                  <><Loader2 className="size-3.5 animate-spin" /><span>Drafting…</span></>
+                ) : (
+                  <><Sparkles className="size-3.5" /><span>Draft with AI</span></>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleSend()}
+                disabled={!reply.trim() || sending}
+                className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2 text-body-md font-bold text-on-primary shadow-sm transition-all hover:brightness-110 active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {sending ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>Sending...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Send Message</span>
+                    <span className="material-symbols-outlined text-[18px]">send</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

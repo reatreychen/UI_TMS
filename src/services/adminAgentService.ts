@@ -11,9 +11,9 @@ export type AgentAvailability = "Online" | "Away (Lunch)" | "On Break" | "Offlin
 
 export interface AgentPerformance {
   ticketsResolved: number;
-  csatScore: number;
+  csatScore: number | null;
   avgResponseTime: string;
-  slaRate: number;
+  slaRate: number | null;
 }
 
 export interface AgentRecord {
@@ -60,6 +60,13 @@ interface BackendTicket {
   id: string;
   assignedAgentId?: string | null;
   status: string;
+  createdAt?: string | Date | null;
+  firstResponseAt?: string | Date | null;
+  resolvedAt?: string | Date | null;
+  closedAt?: string | Date | null;
+  updatedAt?: string | Date | null;
+  rating?: number | null;
+  slaDueAt?: string | Date | null;
 }
 
 interface TicketListPayload {
@@ -98,12 +105,34 @@ function getInitials(name: string) {
 function getRoleName(user: AdminUser): string {
   if (typeof user.role === "object" && user.role?.name) return user.role.name;
   if (typeof user.role === "string") return user.role;
-  return user.jobTitle || "Support Agent";
+  return user.jobTitle || "";
 }
 
 function isAgentUser(user: AdminUser, agentRoleIds: Set<string>) {
   const roleName = getRoleName(user).toLowerCase();
-  if (roleName.includes("agent") || roleName.includes("support") || roleName.includes("engineer") || roleName.includes("specialist")) return true;
+  const fullName = (user.fullName || "").toLowerCase();
+  const email = (user.email || "").toLowerCase();
+
+  if (
+    roleName.includes("customer") ||
+    roleName === "user" ||
+    fullName.includes("customer") ||
+    email.includes("customer")
+  ) {
+    return false;
+  }
+
+  if (
+    roleName.includes("agent") ||
+    roleName.includes("support") ||
+    roleName.includes("engineer") ||
+    roleName.includes("specialist") ||
+    roleName.includes("admin") ||
+    roleName.includes("manager")
+  ) {
+    return true;
+  }
+
   return Boolean(user.roleId && agentRoleIds.has(user.roleId));
 }
 
@@ -112,20 +141,65 @@ function mapAvailability(user: AdminUser): AgentAvailability {
   return "Online";
 }
 
+function calculateAvgResponseTime(tickets: BackendTicket[]): string {
+  const timesInMinutes: number[] = [];
+  for (const t of tickets) {
+    const start = t.createdAt ? new Date(t.createdAt).getTime() : null;
+    const endStr = t.firstResponseAt || t.resolvedAt || t.closedAt || t.updatedAt;
+    const end = endStr ? new Date(endStr).getTime() : null;
+    if (start && end && end >= start) {
+      timesInMinutes.push((end - start) / 60000);
+    }
+  }
+
+  if (timesInMinutes.length === 0) return "N/A";
+  const avgMin = Math.round(timesInMinutes.reduce((a, b) => a + b, 0) / timesInMinutes.length);
+  if (avgMin === 0) return "<1m";
+  if (avgMin < 60) return `${avgMin}m`;
+  const hrs = Math.floor(avgMin / 60);
+  const mins = avgMin % 60;
+  return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+}
+
 function mapUserToAgent(
   user: AdminUser,
   ticketCounts: Map<string, number>,
-  departmentsById: Map<string, AdminDepartment>
+  departmentsById: Map<string, AdminDepartment>,
+  tickets: BackendTicket[] = []
 ): AgentRecord {
-  const activeTickets = ticketCounts.get(user.id) ?? Math.floor(Math.random() * 4) + 1;
+  const activeTickets = ticketCounts.get(user.id) ?? 0;
   const maxCapacity = 5;
-  const role = user.jobTitle || getRoleName(user);
+  const role = user.jobTitle || getRoleName(user) || "Support Agent";
   const departmentName =
     user.department?.name ||
     (user.departmentId ? departmentsById.get(user.departmentId)?.name : undefined) ||
     "Technical Support";
 
-  const skills = DEFAULT_SKILLS_BY_ROLE[role] || ["General", "Customer Care"];
+  const skills = (user as any).skills && Array.isArray((user as any).skills) && (user as any).skills.length > 0
+    ? (user as any).skills
+    : DEFAULT_SKILLS_BY_ROLE[role] || ["General", "Customer Care"];
+
+  // Compute real performance statistics from assigned tickets
+  const assignedTickets = tickets.filter((t) => t.assignedAgentId === user.id);
+  const resolvedCount = assignedTickets.filter((t) => {
+    const s = (t.status || "").toUpperCase();
+    return s === "RESOLVED" || s === "CLOSED" || Boolean(t.resolvedAt) || Boolean(t.closedAt);
+  }).length;
+
+  const ratedTickets = assignedTickets.filter((t) => typeof t.rating === "number" && (t.rating as number) > 0);
+  const csatScore =
+    ratedTickets.length > 0
+      ? Number((ratedTickets.reduce((sum, t) => sum + (t.rating as number), 0) / ratedTickets.length).toFixed(1))
+      : null;
+
+  const slaTickets = assignedTickets.filter((t) => t.slaDueAt);
+  const slaMetCount = slaTickets.filter((t) => {
+    const end = t.resolvedAt || t.closedAt;
+    return end && new Date(end) <= new Date(t.slaDueAt as string);
+  }).length;
+  const slaRate = slaTickets.length > 0 ? Number(((slaMetCount / slaTickets.length) * 100).toFixed(1)) : null;
+
+  const avgResponseTime = calculateAvgResponseTime(assignedTickets);
 
   return {
     id: user.id,
@@ -142,10 +216,10 @@ function mapUserToAgent(
     skills,
     autoAssignEnabled: true,
     performance: {
-      ticketsResolved: Math.floor(Math.random() * 30) + 20,
-      csatScore: Number((4.5 + Math.random() * 0.5).toFixed(1)),
-      avgResponseTime: `${Math.floor(Math.random() * 15) + 5}m`,
-      slaRate: Number((95 + Math.random() * 5).toFixed(1)),
+      ticketsResolved: resolvedCount,
+      csatScore,
+      avgResponseTime,
+      slaRate,
     },
   };
 }
@@ -154,7 +228,8 @@ function buildTicketCounts(tickets: BackendTicket[]) {
   const counts = new Map<string, number>();
 
   for (const ticket of tickets) {
-    if (!ticket.assignedAgentId || !ACTIVE_TICKET_STATUSES.has(ticket.status)) continue;
+    const status = (ticket.status || "").toUpperCase().replace(/\s+/g, "_");
+    if (!ticket.assignedAgentId || !ACTIVE_TICKET_STATUSES.has(status)) continue;
     counts.set(ticket.assignedAgentId, (counts.get(ticket.assignedAgentId) ?? 0) + 1);
   }
 
@@ -242,17 +317,29 @@ export const adminAgentService = {
     let agents: AgentRecord[] = [];
 
     if (users && users.length > 0) {
-      agents = users.map((user, index) => {
-        const mapped = mapUserToAgent(user, ticketCounts, departmentsById);
-        const mock = MOCK_AGENTS_FALLBACK[index % MOCK_AGENTS_FALLBACK.length];
-        return {
-          ...mapped,
-          skills: mapped.skills && mapped.skills.length > 0 ? mapped.skills : mock.skills,
-          autoAssignEnabled: true,
-          maxCapacity: 5,
-          capacityPct: Math.min(100, Math.round((mapped.activeTickets / 5) * 100)),
-        };
-      });
+      const agentUsers = users.filter((user) => isAgentUser(user, agentRoleIds));
+      if (agentUsers.length > 0) {
+        // Deduplicate agents by ID
+        const uniqueMap = new Map<string, AdminUser>();
+        for (const u of agentUsers) {
+          if (!uniqueMap.has(u.id)) {
+            uniqueMap.set(u.id, u);
+          }
+        }
+        const uniqueUsers = Array.from(uniqueMap.values());
+
+        agents = uniqueUsers.map((user) => {
+          const mapped = mapUserToAgent(user, ticketCounts, departmentsById, tickets);
+          return {
+            ...mapped,
+            autoAssignEnabled: true,
+            maxCapacity: 5,
+            capacityPct: Math.min(100, Math.round((mapped.activeTickets / 5) * 100)),
+          };
+        });
+      } else {
+        agents = MOCK_AGENTS_FALLBACK;
+      }
     } else {
       agents = MOCK_AGENTS_FALLBACK;
     }

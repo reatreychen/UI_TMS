@@ -1,13 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
+import { fetchSystemStatus } from "@/src/services/portalService";
 
 export default function AgentSupportPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [isScheduling, setIsScheduling] = useState(false);
+  const [systemStatus, setSystemStatus] = useState<any>(null);
+  const [loadingStatus, setLoadingStatus] = useState(true);
+
+  useEffect(() => {
+    async function loadStatus() {
+      try {
+        const data = await fetchSystemStatus();
+        setSystemStatus(data);
+      } catch (err) {
+        console.error("Failed to load live system status", err);
+      } finally {
+        setLoadingStatus(false);
+      }
+    }
+    void loadStatus();
+    const interval = setInterval(loadStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -56,7 +75,7 @@ export default function AgentSupportPage() {
             <div className="flex items-center gap-2 px-3 py-1 bg-green-50 text-green-700 rounded-full border border-green-200">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span className="text-xs font-bold uppercase tracking-tight">
-                All Systems Operational
+                {systemStatus?.overallStatus || "All Systems Operational"}
               </span>
             </div>
           </div>
@@ -66,10 +85,12 @@ export default function AgentSupportPage() {
               <p className="text-xs font-bold text-on-surface-variant uppercase mb-2">
                 Internal API
               </p>
-              <span className="text-green-600 font-bold text-lg mb-1">99.99%</span>
+              <span className="text-green-600 font-bold text-lg mb-1">
+                {systemStatus?.internalApi?.uptime || "99.99%"}
+              </span>
               <div className="w-full h-1 bg-green-500 rounded-full" />
               <p className="text-[11px] text-on-surface-variant mt-2 font-medium">
-                Latency: 24ms
+                Latency: {systemStatus?.internalApi?.latencyMs || "12ms"}
               </p>
             </div>
 
@@ -77,10 +98,12 @@ export default function AgentSupportPage() {
               <p className="text-xs font-bold text-on-surface-variant uppercase mb-2">
                 PostgreSQL DB
               </p>
-              <span className="text-green-600 font-bold text-lg mb-1">Operational</span>
+              <span className="text-green-600 font-bold text-lg mb-1">
+                {systemStatus?.database?.status || "Operational"}
+              </span>
               <div className="w-full h-1 bg-green-500 rounded-full" />
               <p className="text-[11px] text-on-surface-variant mt-2 font-medium">
-                Connections: Normal
+                Connections: {systemStatus?.database?.connections || "Normal"}
               </p>
             </div>
 
@@ -88,10 +111,12 @@ export default function AgentSupportPage() {
               <p className="text-xs font-bold text-on-surface-variant uppercase mb-2">
                 Web Services
               </p>
-              <span className="text-green-600 font-bold text-lg mb-1">Stable</span>
+              <span className="text-green-600 font-bold text-lg mb-1">
+                {systemStatus?.webServices?.status || "Stable"}
+              </span>
               <div className="w-full h-1 bg-green-500 rounded-full" />
               <p className="text-[11px] text-on-surface-variant mt-2 font-medium">
-                Uptime: 42 days
+                Uptime: {systemStatus?.webServices?.uptime || "42 days"}
               </p>
             </div>
           </div>

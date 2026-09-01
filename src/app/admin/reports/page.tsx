@@ -45,7 +45,9 @@ export default function ReportsPage() {
       : totalTickets > 0 ? "2h 45m" : "0h 0m",
     resDiff: "-18m",
     cost: totalTickets > 0 ? `$${(150 / Math.max(totalTickets, 1)).toFixed(2)}` : "$0.00",
-    csat: totalTickets > 0 ? "4.9" : "5.0",
+    csat: reportData?.avgRating !== null && reportData?.avgRating !== undefined
+      ? String(reportData.avgRating)
+      : "5.0",
   };
 
   // Data points for interactive SVG chart

@@ -5,6 +5,7 @@ import { adminCategoryService, Category, PaginatedCategories } from "@/src/servi
 import { AdminDepartment } from "@/src/services/adminUserService";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { fetchCategoriesThunk } from "@/src/store/slices/categorySlice";
+import toast from "react-hot-toast";
 
 export default function CategoriesPage() {
   const dispatch = useAppDispatch();
@@ -72,7 +73,7 @@ export default function CategoriesPage() {
       fetchCategories();
     } catch (err) {
       console.error("Failed to save category", err);
-      alert("Failed to save category");
+      toast.error("Failed to save category");
     } finally {
       setSubmitting(false);
     }
@@ -80,7 +81,7 @@ export default function CategoriesPage() {
 
   const handleExportCSV = () => {
     if (!data?.data || data.data.length === 0) {
-      alert("No category data available to export.");
+      toast.error("No category data available to export.");
       return;
     }
 

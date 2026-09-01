@@ -35,6 +35,9 @@ export interface QueueTicket {
   firstResponseAt?: string | null;
   resolvedAt?: string | null;
   closedAt?: string | null;
+  rating?: number | null;
+  ratingFeedback?: string | null;
+  ratedAt?: string | null;
   customer?: {
     id: string;
     fullName?: string;
@@ -376,4 +379,15 @@ export async function discoverTelegramChatId() {
   const res = await api.get("/telegram/discover");
   return res.data;
 }
+
+export async function rateTicket(ticketId: string, rating: number, feedback?: string) {
+  const res = await api.patch(`/tickets/${ticketId}/rate`, { rating, feedback });
+  return res.data;
+}
+
+export async function fetchSystemStatus() {
+  const res = await api.get("/resources/system-status");
+  return res.data?.data ?? res.data;
+}
+
 

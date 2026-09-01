@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,9 +11,15 @@ import {
   CloudUpload,
   Loader2,
   CheckCircle2,
+  Sparkles,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  Zap,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import { aiSuggestTicket, type AiSuggestResult, type AiKbArticle } from "@/src/services/aiAssistService";
 
 
 const schema = z.object({
@@ -72,6 +78,14 @@ export function CreateTicketForm() {
   const [dragOver, setDragOver] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
 
+  // ── AI Assist state ───────────────────────────────────────────────────────
+  const [aiResult, setAiResult] = useState<AiSuggestResult | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiApplied, setAiApplied] = useState(false);
+  const [expandedArticle, setExpandedArticle] = useState<string | null>(null);
+  const aiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+
   useEffect(() => {
     dispatch(fetchCategoriesThunk());
   }, [dispatch]);
@@ -82,12 +96,44 @@ export function CreateTicketForm() {
     formState: { errors, isSubmitting },
     reset,
     watch,
+    setValue,
   } = useForm<FormValues>({
+
     resolver: zodResolver(schema),
     defaultValues: { priority: "medium" },
   });
 
   const selectedPriority = watch("priority");
+  const watchedDescription = watch("description");
+  const watchedSubject = watch("subject");
+
+  // ── AI debounced suggestion ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!watchedDescription || watchedDescription.length < 20) {
+      setAiResult(null);
+      setAiApplied(false);
+      return;
+    }
+    if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current);
+    aiDebounceRef.current = setTimeout(async () => {
+      setAiLoading(true);
+      const result = await aiSuggestTicket(
+        watchedSubject || "Support Request",
+        watchedDescription
+      );
+      setAiLoading(false);
+      if (result && (result.suggestedCategoryId || result.kbArticles.length > 0)) {
+        setAiResult(result);
+        setAiApplied(false);
+      } else {
+        setAiResult(null);
+      }
+    }, 1200);
+    return () => {
+      if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current);
+    };
+  }, [watchedDescription, watchedSubject]);
+
 
   /* Dropzone handlers */
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -302,7 +348,135 @@ export function CreateTicketForm() {
           </div>
         </section>
 
-        {/* ── Section 3: Attachments ───────────────────────────────── */}
+        {/* ── AI Suggestions Panel ─────────────────────────────────────── */}
+        {(aiLoading || aiResult) && (
+          <section
+            className="rounded-xl border border-primary/30 bg-gradient-to-br from-primary/5 via-surface-container-lowest to-secondary/5 p-stack-lg shadow-sm"
+            aria-live="polite"
+            aria-label="AI Suggestions"
+          >
+            <div className="mb-stack-md flex items-center gap-2">
+              <Sparkles className="size-5 text-primary" aria-hidden strokeWidth={2} />
+              <h2 className="text-headline-md font-semibold text-on-surface">
+                AI Suggestions
+              </h2>
+              {aiLoading && (
+                <span className="ml-auto flex items-center gap-1.5 text-label-md text-on-surface-variant">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Analyzing…
+                </span>
+              )}
+              {!aiLoading && aiResult && (
+                <span className="ml-auto rounded-full bg-primary/10 px-2 py-0.5 text-label-sm text-primary font-medium">
+                  ✨ Powered by Gemini
+                </span>
+              )}
+            </div>
+
+            {/* Loading skeleton */}
+            {aiLoading && !aiResult && (
+              <div className="space-y-3 animate-pulse">
+                <div className="h-4 w-3/4 rounded-md bg-outline-variant/40" />
+                <div className="h-4 w-1/2 rounded-md bg-outline-variant/40" />
+                <div className="h-12 w-full rounded-lg bg-outline-variant/30" />
+              </div>
+            )}
+
+            {!aiLoading && aiResult && (
+              <div className="space-y-stack-md">
+                {/* Category suggestion */}
+                {aiResult.suggestedCategoryId && aiResult.suggestedCategoryName && (
+                  <div className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-surface-container-low p-stack-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                      <Zap className="size-4 shrink-0 text-primary" aria-hidden />
+                      <span className="text-body-md text-on-surface">
+                        AI suggests category:{" "}
+                        <strong className="text-primary">{aiResult.suggestedCategoryName}</strong>
+                        {aiResult.reasoning && (
+                          <span className="ml-1 text-label-sm text-on-surface-variant">
+                            ({aiResult.reasoning})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    {aiApplied ? (
+                      <span className="flex items-center gap-1 text-label-md text-primary font-medium shrink-0">
+                        <CheckCircle2 className="size-4" />
+                        Applied
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        id="ai-apply-category-btn"
+                        onClick={() => {
+                          if (aiResult.suggestedCategoryId) {
+                            setValue("categoryId", aiResult.suggestedCategoryId, { shouldValidate: true });
+                            setAiApplied(true);
+                          }
+                        }}
+                        className="shrink-0 rounded-lg border border-primary bg-primary px-stack-sm py-base text-label-md font-semibold text-on-primary shadow-sm transition hover:opacity-90 active:scale-95"
+                      >
+                        Apply
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* KB Article suggestions */}
+                {aiResult.kbArticles.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="flex items-center gap-1.5 text-label-md font-medium text-on-surface-variant">
+                      <BookOpen className="size-4" aria-hidden />
+                      These articles may help you resolve this without submitting a ticket:
+                    </p>
+                    <ul className="space-y-2">
+                      {aiResult.kbArticles.map((article: AiKbArticle) => (
+                        <li
+                          key={article.id}
+                          className="rounded-lg border border-outline-variant bg-surface-container-lowest transition-all"
+                        >
+                          <button
+                            type="button"
+                            id={`ai-kb-article-${article.id}`}
+                            className="flex w-full items-center justify-between gap-3 px-stack-sm py-stack-sm text-left"
+                            onClick={() =>
+                              setExpandedArticle(
+                                expandedArticle === article.id ? null : article.id
+                              )
+                            }
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <BookOpen className="size-4 shrink-0 text-secondary" aria-hidden />
+                              <span className="truncate text-body-md font-medium text-on-surface">
+                                {article.title}
+                              </span>
+                              <span className="shrink-0 rounded-full bg-secondary/10 px-2 py-px text-label-sm text-secondary">
+                                {article.category}
+                              </span>
+                            </div>
+                            {expandedArticle === article.id ? (
+                              <ChevronUp className="size-4 shrink-0 text-on-surface-variant" />
+                            ) : (
+                              <ChevronDown className="size-4 shrink-0 text-on-surface-variant" />
+                            )}
+                          </button>
+                          {expandedArticle === article.id && (
+                            <div className="border-t border-outline-variant px-stack-sm py-stack-sm">
+                              <p className="text-body-md text-on-surface-variant leading-relaxed">
+                                {article.excerpt}
+                              </p>
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
         <section className="rounded-xl border border-outline-variant bg-surface-container-lowest p-stack-lg shadow-sm">
           <div className="mb-stack-md flex items-center gap-2">
             <Paperclip

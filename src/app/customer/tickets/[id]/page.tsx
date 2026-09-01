@@ -8,16 +8,18 @@ import { PortalFooter } from "@/src/components/portal/PortalFooter";
 import { useParams } from "next/navigation";
 import { useAppSelector } from "@/src/store/hooks";
 import { selectUser } from "@/src/store/slices/authSlice";
+import { ProtectedRoute } from "@/src/components/auth/ProtectedRoute";
 import {
   fetchTicket,
   fetchTicketComments,
   createTicketComment,
   updateTicketStatus,
   uploadTicketAttachment,
+  rateTicket,
   TicketComment,
 } from "@/src/services/portalService";
 import { formatDistanceToNow, format } from "date-fns";
-import { Loader2 } from "lucide-react";
+import { Loader2, Star, CheckCircle2 } from "lucide-react";
 
 type MessageType = "customer" | "agent" | "event";
 interface Message {
@@ -40,6 +42,9 @@ interface CustomerTicket {
   category?: { name?: string };
   customer?: { id: string };
   assignedAgent?: { fullName?: string; name?: string };
+  rating?: number | null;
+  ratingFeedback?: string | null;
+  ratedAt?: string | null;
   attachments?: {
     id: string;
     fileName: string;
@@ -61,6 +66,10 @@ export default function TicketDetailPage() {
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [uploadStatusMsg, setUploadStatusMsg] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [selectedRating, setSelectedRating] = useState<number>(0);
+  const [hoverRating, setHoverRating] = useState<number>(0);
+  const [ratingFeedbackText, setRatingFeedbackText] = useState("");
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -332,7 +341,8 @@ export default function TicketDetailPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-on-surface font-body-md">
+    <ProtectedRoute allowedRoles={["customer", "agent", "admin"]}>
+      <div className="flex min-h-screen flex-col bg-background text-on-surface font-body-md">
       <TopNav activePage="tickets" />
 
       <main className="flex-1 max-w-[1440px] mx-auto w-full px-container-margin py-8 flex flex-col md:flex-row gap-gutter">
@@ -380,6 +390,131 @@ export default function TicketDetailPage() {
               </Link>
             </div>
           </div>
+
+          {/* ── CSAT Rating Section (Shown for RESOLVED or CLOSED tickets) ── */}
+          {(ticket.status === "RESOLVED" || ticket.status === "CLOSED") && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-5 shadow-xs transition-all">
+              <div className="flex items-center gap-2 mb-2">
+                <Star className="size-5 text-amber-500 fill-amber-500" />
+                <h3 className="font-headline-md text-headline-sm font-semibold text-amber-950">
+                  Customer Satisfaction Survey
+                </h3>
+              </div>
+
+              {ticket.rating ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-body-md text-amber-900 font-medium">Your Rating:</span>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`size-5 ${
+                            star <= ticket.rating!
+                              ? "text-amber-500 fill-amber-500"
+                              : "text-gray-300"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="font-bold text-amber-900 ml-1">({ticket.rating}/5)</span>
+                    <span className="ml-auto text-xs text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="size-3.5 text-amber-600" /> Rating Submitted
+                    </span>
+                  </div>
+                  {ticket.ratingFeedback && (
+                    <p className="text-body-sm italic text-amber-900 bg-white/70 p-3 rounded-lg border border-amber-200">
+                      &ldquo;{ticket.ratingFeedback}&rdquo;
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-body-md text-amber-900">
+                    How satisfied were you with the support you received for this ticket?
+                  </p>
+
+                  {/* 5-Star Interactive Selector */}
+                  <div className="flex items-center gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => {
+                      const isFilled = star <= (hoverRating || selectedRating);
+                      return (
+                        <button
+                          key={star}
+                          type="button"
+                          onMouseEnter={() => setHoverRating(star)}
+                          onMouseLeave={() => setHoverRating(0)}
+                          onClick={() => setSelectedRating(star)}
+                          className="p-1 transition-transform hover:scale-125 focus:outline-none cursor-pointer"
+                        >
+                          <Star
+                            className={`size-7 transition-colors ${
+                              isFilled
+                                ? "text-amber-500 fill-amber-500"
+                                : "text-amber-300 hover:text-amber-400"
+                            }`}
+                          />
+                        </button>
+                      );
+                    })}
+                    {selectedRating > 0 && (
+                      <span className="text-label-md font-bold text-amber-900 ml-2">
+                        {selectedRating === 5
+                          ? "Excellent! ⭐⭐⭐⭐⭐"
+                          : selectedRating === 4
+                          ? "Good ⭐⭐⭐⭐"
+                          : selectedRating === 3
+                          ? "Average ⭐⭐⭐"
+                          : selectedRating === 2
+                          ? "Poor ⭐⭐"
+                          : "Terrible ⭐"}
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedRating > 0 && (
+                    <div className="space-y-2 animate-in fade-in duration-200">
+                      <textarea
+                        value={ratingFeedbackText}
+                        onChange={(e) => setRatingFeedbackText(e.target.value)}
+                        placeholder="Add optional comments or feedback for the support agent..."
+                        className="w-full rounded-lg border border-amber-300 bg-white p-3 text-body-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        rows={2}
+                      />
+
+                      <button
+                        type="button"
+                        disabled={isSubmittingRating}
+                        onClick={async () => {
+                          setIsSubmittingRating(true);
+                          try {
+                            await rateTicket(id, selectedRating, ratingFeedbackText);
+                            toast.success("Thank you for your rating!");
+                            void loadTicketData(true);
+                          } catch (err) {
+                            console.error("Failed to submit rating", err);
+                            toast.error("Failed to submit rating. Please try again.");
+                          } finally {
+                            setIsSubmittingRating(false);
+                          }
+                        }}
+                        className="rounded-lg bg-amber-600 px-4 py-2 font-body-md font-bold text-white shadow-sm hover:bg-amber-700 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSubmittingRating ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin" />
+                            <span>Submitting...</span>
+                          </>
+                        ) : (
+                          <span>Submit Feedback</span>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Timeline */}
           <div
@@ -693,5 +828,6 @@ export default function TicketDetailPage() {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `}</style>
     </div>
+    </ProtectedRoute>
   );
 }

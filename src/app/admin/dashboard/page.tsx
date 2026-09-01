@@ -102,7 +102,12 @@ export default function AdminDashboardPage() {
   const [apiError, setApiError] = useState<string | null>(null);
 
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [reportAnalytics, setReportAnalytics] = useState<any>(null);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
+  const [ticketPage, setTicketPage] = useState(1);
+  const ticketsPerPage = 5;
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [priorityFilter, setPriorityFilter] = useState("All");
   const [backendUsers, setBackendUsers] = useState<BackendUser[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
 
@@ -251,6 +256,18 @@ export default function AdminDashboardPage() {
       } catch (err: any) {
         console.warn("Categories public endpoint failed:", err?.message);
       }
+ 
+      // 5. Fetch Reports Analytics for live CSAT rating & period trends
+      try {
+        const periodDays = timeRange === "Last 7 Days" ? 7 : timeRange === "Last 90 Days" ? 90 : timeRange === "Year to Date" ? 365 : 30;
+        const analyticsRes = await api.get(`/reports/analytics?period=${periodDays}`);
+        const data = analyticsRes.data?.data;
+        if (data) {
+          setReportAnalytics(data);
+        }
+      } catch (err: any) {
+        console.warn("Reports analytics endpoint failed:", err?.message);
+      }
 
     } catch (err: any) {
       console.error("Dashboard fetch error:", err);
@@ -269,6 +286,7 @@ export default function AdminDashboardPage() {
     const handleSearch = (e: Event) => {
       const customEvt = e as CustomEvent<string>;
       setSearchQuery(customEvt.detail || "");
+      setTicketPage(1);
     };
 
     const handleOpenModal = () => {
@@ -312,10 +330,15 @@ export default function AdminDashboardPage() {
     ? `${Math.round((resolvedCount / tickets.length) * 100)}%`
     : "94.2%";
 
+  const csatValue =
+    reportAnalytics?.avgRating !== null && reportAnalytics?.avgRating !== undefined
+      ? String(reportAnalytics.avgRating)
+      : "5.0";
+
   const currentMetrics = {
     totalTickets: totalTicketsCount.toLocaleString(),
     resolution: computedResolutionRate,
-    csat: "4.82",
+    csat: csatValue,
     activeAgents: visibleAgents.filter((a) => a.status === "online").length || visibleAgents.length,
     ticketDiff: "+12%",
   };
@@ -419,14 +442,28 @@ export default function AdminDashboardPage() {
 
   const totalDonutCount = triageInsights.reduce((sum, item) => sum + (item.count || 0), 0) || totalTicketsCount;
 
-  const filteredTickets = tickets.filter(
-    (t) =>
+  const filteredTickets = tickets.filter((t) => {
+    const matchesSearch =
+      !searchQuery ||
       t.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.agent.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.status.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.priority.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      t.priority.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === "All" || t.status.toLowerCase() === statusFilter.toLowerCase();
+
+    const matchesPriority =
+      priorityFilter === "All" || t.priority.toLowerCase() === priorityFilter.toLowerCase();
+
+    return matchesSearch && matchesStatus && matchesPriority;
+  });
+
+  const startTicketIdx = (ticketPage - 1) * ticketsPerPage;
+  const endTicketIdx = Math.min(startTicketIdx + ticketsPerPage, filteredTickets.length);
+  const paginatedTickets = filteredTickets.slice(startTicketIdx, startTicketIdx + ticketsPerPage);
+  const totalTicketPages = Math.max(1, Math.ceil(filteredTickets.length / ticketsPerPage));
 
   const handleExportReport = async () => {
     setIsExporting(true);
@@ -951,7 +988,7 @@ export default function AdminDashboardPage() {
       <section className="grid grid-cols-12 gap-stack-md">
         {/* Recent System Tickets Table */}
         <div className="col-span-12 xl:col-span-8 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-xs overflow-hidden flex flex-col">
-          <div className="p-stack-md border-b border-outline-variant flex items-center justify-between">
+          <div className="p-stack-md border-b border-outline-variant flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h4 className="font-headline-md text-headline-md text-on-background">
                 Recent System Tickets
@@ -962,13 +999,64 @@ export default function AdminDashboardPage() {
                 </p>
               )}
             </div>
-            <button
-              onClick={() => setShowNewTicketModal(true)}
-              className="text-primary text-body-md font-semibold hover:underline cursor-pointer flex items-center gap-1"
-            >
-              <span className="material-symbols-outlined text-[18px]">add_circle</span>
-              New Ticket
-            </button>
+
+            {/* Action Filters */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setTicketPage(1);
+                }}
+                className="py-1.5 px-3 bg-surface-container-low border border-outline-variant rounded-lg text-xs font-semibold text-on-surface focus:outline-none cursor-pointer"
+              >
+                <option value="All">Status: All</option>
+                <option value="In Progress">Status: In Progress</option>
+                <option value="Pending">Status: Pending</option>
+                <option value="Resolved">Status: Resolved</option>
+                <option value="Closed">Status: Closed</option>
+              </select>
+
+              {/* Priority Filter */}
+              <select
+                value={priorityFilter}
+                onChange={(e) => {
+                  setPriorityFilter(e.target.value);
+                  setTicketPage(1);
+                }}
+                className="py-1.5 px-3 bg-surface-container-low border border-outline-variant rounded-lg text-xs font-semibold text-on-surface focus:outline-none cursor-pointer"
+              >
+                <option value="All">Priority: All</option>
+                <option value="Critical">Priority: Critical</option>
+                <option value="High">Priority: High</option>
+                <option value="Medium">Priority: Medium</option>
+                <option value="Low">Priority: Low</option>
+              </select>
+
+              {(statusFilter !== "All" || priorityFilter !== "All" || searchQuery) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusFilter("All");
+                    setPriorityFilter("All");
+                    setSearchQuery("");
+                    setTicketPage(1);
+                  }}
+                  className="text-xs text-error font-semibold hover:underline px-2 py-1 cursor-pointer"
+                >
+                  Reset
+                </button>
+              )}
+
+              <button
+                onClick={() => setShowNewTicketModal(true)}
+                className="text-primary text-body-md font-semibold hover:underline cursor-pointer flex items-center gap-1 ml-1"
+              >
+                <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                New Ticket
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto flex-1">
@@ -999,7 +1087,7 @@ export default function AdminDashboardPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredTickets.map((t, index) => (
+                  paginatedTickets.map((t, index) => (
                     <tr
                       key={t.rawId ? t.rawId : `${t.id}-${index}`}
                       className="hover:bg-surface-container-low/70 transition-colors cursor-pointer group"
@@ -1051,9 +1139,42 @@ export default function AdminDashboardPage() {
             </table>
           </div>
 
-          <div className="p-3 border-t border-outline-variant bg-surface-container-low flex justify-between items-center text-xs text-outline">
-            <span>Showing {filteredTickets.length} tickets</span>
-            <Link href="/admin/categories" className="text-primary font-semibold hover:underline">
+          <div className="p-3 border-t border-outline-variant bg-surface-container-low flex flex-col sm:flex-row gap-3 justify-between items-center text-xs text-outline">
+            <div className="flex items-center gap-2">
+              <span>
+                Showing {filteredTickets.length > 0 ? startTicketIdx + 1 : 0}-
+                {endTicketIdx} of {filteredTickets.length} tickets
+              </span>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setTicketPage((p) => Math.max(1, p - 1))}
+                disabled={ticketPage === 1}
+                className="px-2.5 py-1 rounded-md border border-outline-variant bg-white font-medium hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                title="Previous Page"
+              >
+                &larr; Prev
+              </button>
+
+              <span className="px-2 py-1 text-on-surface font-semibold">
+                Page {ticketPage} of {totalTicketPages}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setTicketPage((p) => Math.min(totalTicketPages, p + 1))}
+                disabled={ticketPage >= totalTicketPages}
+                className="px-2.5 py-1 rounded-md border border-outline-variant bg-white font-medium hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                title="Next Page"
+              >
+                Next &rarr;
+              </button>
+            </div>
+
+            <Link href="/admin/ticket-management" className="text-primary font-semibold hover:underline">
               View All Ticket Archives &rarr;
             </Link>
           </div>

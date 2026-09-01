@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { api } from "@/src/lib/api";
 import {
   adminAgentService,
   AgentRecord,
@@ -45,6 +46,7 @@ export default function DepartmentsPage() {
 
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [editingAgent, setEditingAgent] = useState<AgentRecord | null>(null);
+  const [csatRating, setCsatRating] = useState<string | null>(null);
 
   const stats = useMemo(() => adminAgentService.computeStats(agents), [agents]);
 
@@ -63,6 +65,16 @@ export default function DepartmentsPage() {
         setDepartments(data.departments);
         setAgentRoleId(data.agentRoleId);
         setNewDepartmentId((current) => current || data.departments[0]?.id || "");
+
+        try {
+          const analyticsRes = await api.get("/reports/analytics?period=30");
+          const avg = analyticsRes.data?.data?.avgRating;
+          if (avg !== null && avg !== undefined && mounted) {
+            setCsatRating(String(avg));
+          }
+        } catch (err) {
+          console.warn("Analytics fetch failed in Agent Management", err);
+        }
       } catch (error) {
         if (!mounted) return;
         setErrorMessage(getErrorMessage(error));
@@ -309,7 +321,9 @@ export default function DepartmentsPage() {
             Avg. Customer Rating (CSAT)
           </span>
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-display text-on-surface font-bold">4.82</span>
+            <span className="font-display text-display text-on-surface font-bold">
+              {csatRating ?? "5.0"}
+            </span>
             <span className="text-green-600 font-label-md text-label-md font-bold">Target: 4.50</span>
           </div>
         </div>

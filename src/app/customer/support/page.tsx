@@ -109,7 +109,6 @@ export default function CustomerSupportPage() {
     void loadPopularArticles();
   }, [loadTickets, loadCategories, loadPopularArticles]);
 
-  // Cmd+K shortcut listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {

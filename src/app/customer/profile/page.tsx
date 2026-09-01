@@ -1,21 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TopNav } from "@/src/components/portal/TopNav";
 import { PortalFooter } from "@/src/components/portal/PortalFooter";
 import { useAppSelector } from "@/src/store/hooks";
 import { selectUser, selectRoleName } from "@/src/store/slices/authSlice";
+import { ProtectedRoute } from "@/src/components/auth/ProtectedRoute";
 
 export default function CustomerProfilePage() {
   const currentUser = useAppSelector(selectUser);
   const userRole = useAppSelector(selectRoleName);
 
-  const [fullName, setFullName] = useState(currentUser?.fullName || "Chhun Makara");
-  const [email, setEmail] = useState(currentUser?.email || "makarachhun59@gmail.com");
+  const [fullName, setFullName] = useState(currentUser?.fullName || "");
+  const [email, setEmail] = useState(currentUser?.email || "");
   const [phone, setPhone] = useState("+855 12 345 678");
   const [organization, setOrganization] = useState("Enterprise Customer");
   const [language, setLanguage] = useState("English (US)");
   const [timezone, setTimezone] = useState("Asia/Phnom_Penh (GMT+7)");
+
+  useEffect(() => {
+    if (currentUser) {
+      setFullName(currentUser.fullName || "");
+      setEmail(currentUser.email || "");
+    }
+  }, [currentUser]);
   
   const [showToast, setShowToast] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
@@ -32,7 +40,8 @@ export default function CustomerProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-on-surface font-body-md antialiased flex flex-col justify-between">
+    <ProtectedRoute allowedRoles={["customer", "agent", "admin"]}>
+      <div className="min-h-screen bg-background text-on-surface font-body-md antialiased flex flex-col justify-between">
       <div>
         <TopNav activePage="settings" />
 
@@ -187,5 +196,6 @@ export default function CustomerProfilePage() {
 
       <PortalFooter />
     </div>
+    </ProtectedRoute>
   );
 }
