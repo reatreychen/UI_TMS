@@ -13,7 +13,16 @@ import {
 } from "@/src/store/slices/notificationSlice";
 import type { Notification } from "@/src/services/notificationService";
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8000";
+function resolveWsUrl(): string {
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (apiUrl && (apiUrl.includes("localhost") || apiUrl.includes("127.0.0.1"))) {
+    return apiUrl.replace(/\/api\/v1$/, "");
+  }
+  return "";
+}
 
 export function useNotificationSocket() {
   const dispatch = useAppDispatch();
@@ -21,12 +30,20 @@ export function useNotificationSocket() {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated || typeof window === "undefined") return;
+    const wsUrl = resolveWsUrl();
+    if (
+      !isAuthenticated ||
+      typeof window === "undefined" ||
+      !wsUrl ||
+      wsUrl.includes(".netlify.app")
+    ) {
+      return;
+    }
 
     const token = localStorage.getItem("accessToken");
     if (!token) return;
 
-    const socket: Socket = io(`${WS_URL}/ws/notifications`, {
+    const socket: Socket = io(`${wsUrl}/ws/notifications`, {
       auth: { token },
       transports: ["websocket"],
       reconnection: true,

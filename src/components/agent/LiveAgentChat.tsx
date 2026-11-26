@@ -18,7 +18,12 @@ interface LiveAgentChatProps {
   session?: ChatSession;
 }
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/v1$/, "") || "http://localhost:8000";
+const API_ORIGIN =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/v1$/, "") ||
+  "http://localhost:8000";
+const SOCKET_URL =
+  process.env.NEXT_PUBLIC_WS_URL ||
+  (API_ORIGIN.includes(".netlify.app") ? "" : API_ORIGIN);
 
 export function LiveAgentChat({ sessionId, session }: LiveAgentChatProps) {
   const currentUser = useAppSelector(selectUser);
@@ -55,35 +60,58 @@ export function LiveAgentChat({ sessionId, session }: LiveAgentChatProps) {
 
   useEffect(() => {
     if (!sessionId) return;
-    setLoading(true);
+    let active = true;
 
-    const stored = loadStoredMessages();
-    if (stored?.length) {
-      setMessages(stored);
-      setLoading(false);
-    }
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      const stored = loadStoredMessages();
+      if (stored?.length) {
+        setMessages(stored);
+        setLoading(false);
+      }
 
-    fetchChatSessionMessages(sessionId)
-      .then((data) => {
-        setMessages(data);
-        saveMessagesToStorage(data);
-        setError(null);
-      })
-      .catch((err) => {
-        console.error("Failed to load chat messages", err);
-        setError("Unable to refresh chat history. Showing saved messages.");
-      })
-      .finally(() => setLoading(false));
+      fetchChatSessionMessages(sessionId)
+        .then((data) => {
+          if (!active) return;
+          setMessages(data);
+          saveMessagesToStorage(data);
+          setError(null);
+        })
+        .catch((err) => {
+          console.error("Failed to load chat messages", err);
+          if (active) {
+            setError("Unable to refresh chat history. Showing saved messages.");
+          }
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [sessionId]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      setLoading(false);
-    }
-  }, [messages]);
-
-  useEffect(() => {
     if (!sessionId) return;
+
+    if (!SOCKET_URL) {
+      const pollTimer = window.setInterval(() => {
+        fetchChatSessionMessages(sessionId)
+          .then((data) => {
+            setMessages(data);
+            saveMessagesToStorage(data);
+            setError(null);
+          })
+          .catch(() => {
+            // keep last synced messages on transient poll error
+          });
+      }, 5000);
+
+      return () => window.clearInterval(pollTimer);
+    }
 
     const socket = io(`${SOCKET_URL}/ws/chat`, {
       transports: ["websocket"],
