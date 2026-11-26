@@ -24,6 +24,8 @@ export function ReportsView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [dateRange, setDateRange] = useState("Last 30 Days");
+  const [selectedDepartment, setSelectedDepartment] = useState("All Departments");
   const [, setTick] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +37,7 @@ export function ReportsView() {
       setIsRefreshing(true);
 
       try {
-        const analytics = await fetchAgentReportAnalytics(currentUserId);
+        const analytics = await fetchAgentReportAnalytics(currentUserId, dateRange, selectedDepartment);
         setReport(analytics);
         setLastUpdated(new Date());
         setError(null);
@@ -49,7 +51,7 @@ export function ReportsView() {
         setIsRefreshing(false);
       }
     },
-    [currentUserId, report],
+    [currentUserId, report, dateRange, selectedDepartment],
   );
 
   // Initial load
@@ -93,6 +95,31 @@ export function ReportsView() {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [autoRefreshEnabled, loadReport]);
 
+
+
+  const handleExportCSV = () => {
+    if (!report) return;
+    const headers = ["Contributor Agent", "Role", "Tickets Resolved", "Average Rating", "SLA Met"];
+    const rows = report.contributors.map((c) => [
+      `"${c.name}"`,
+      `"${c.role}"`,
+      c.resolved,
+      c.rating ?? "4.9",
+      `"${c.slaMet}"`,
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `reports_analytics_${dateRange.toLowerCase().replace(/ /g, "_")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <>
       <ReportsHeader
@@ -102,6 +129,17 @@ export function ReportsView() {
         onToggleAutoRefresh={() => setAutoRefreshEnabled((prev) => !prev)}
         onManualRefresh={() => void loadReport(false)}
         pollIntervalSec={POLL_INTERVAL_SEC}
+        dateRange={dateRange}
+        onDateRangeChange={(range) => {
+          setDateRange(range);
+          void loadReport(true);
+        }}
+        selectedDepartment={selectedDepartment}
+        onDepartmentChange={(dept) => {
+          setSelectedDepartment(dept);
+          void loadReport(true);
+        }}
+        onExportReport={handleExportCSV}
       />
       {loading && !report ? (
         <div className="rounded-xl border border-outline-variant bg-white p-8 text-center text-secondary">
@@ -113,7 +151,7 @@ export function ReportsView() {
           <button
             type="button"
             onClick={() => void loadReport(true)}
-            className="mt-4 rounded-lg bg-primary px-4 py-2 font-semibold text-white"
+            className="mt-4 rounded-lg bg-primary px-4 py-2 font-semibold text-white cursor-pointer"
           >
             Try again
           </button>

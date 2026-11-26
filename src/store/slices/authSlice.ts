@@ -1,5 +1,10 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import { authService, User, LoginPayload, RegisterPayload } from "../../services/authService";
+import {
+  authService,
+  User,
+  LoginPayload,
+  RegisterPayload,
+} from "../../services/authService";
 import type { RootState } from "../store";
 
 export type RoleName = "admin" | "agent" | "customer" | "unknown";
@@ -69,7 +74,8 @@ export const loginThunk = createAsyncThunk<
 
     return user;
   } catch (err: any) {
-    const msg = err.response?.data?.message || err.message || "Failed to log in";
+    const msg =
+      err.response?.data?.message || err.message || "Failed to log in";
     return rejectWithValue(msg);
   }
 });
@@ -91,7 +97,8 @@ export const registerThunk = createAsyncThunk<
 
     return user;
   } catch (err: any) {
-    const msg = err.response?.data?.message || err.message || "Registration failed";
+    const msg =
+      err.response?.data?.message || err.message || "Registration failed";
     return rejectWithValue(msg);
   }
 });
@@ -114,8 +121,6 @@ export const checkAuthThunk = createAsyncThunk<
     }
     return null;
   } catch (err: any) {
-    // Network error or backend unreachable — fall back to cached user
-    // so the user stays logged in instead of being kicked out
     const cachedUser = localStorage.getItem("user");
     if (cachedUser) {
       try {
@@ -167,12 +172,15 @@ export const authSlice = createSlice({
       state.isLoading = true;
       state.error = null;
     });
-    builder.addCase(loginThunk.fulfilled, (state, action: PayloadAction<User>) => {
-      state.isLoading = false;
-      state.isAuthenticated = true;
-      state.isInitialized = true;
-      state.user = action.payload;
-    });
+    builder.addCase(
+      loginThunk.fulfilled,
+      (state, action: PayloadAction<User>) => {
+        state.isLoading = false;
+        state.isAuthenticated = true;
+        state.isInitialized = true;
+        state.user = action.payload;
+      },
+    );
     builder.addCase(loginThunk.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload || "Login failed";
@@ -183,12 +191,15 @@ export const authSlice = createSlice({
       state.isLoading = true;
       state.error = null;
     });
-    builder.addCase(registerThunk.fulfilled, (state, action: PayloadAction<User>) => {
-      state.isLoading = false;
-      state.isAuthenticated = true;
-      state.isInitialized = true;
-      state.user = action.payload;
-    });
+    builder.addCase(
+      registerThunk.fulfilled,
+      (state, action: PayloadAction<User>) => {
+        state.isLoading = false;
+        state.isAuthenticated = true;
+        state.isInitialized = true;
+        state.user = action.payload;
+      },
+    );
     builder.addCase(registerThunk.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload || "Registration failed";
@@ -198,16 +209,19 @@ export const authSlice = createSlice({
     builder.addCase(checkAuthThunk.pending, (state) => {
       state.isLoading = true;
     });
-    builder.addCase(checkAuthThunk.fulfilled, (state, action: PayloadAction<User | null>) => {
-      state.isLoading = false;
-      state.isInitialized = true;
-      if (action.payload) {
-        state.user = action.payload;
-        state.isAuthenticated = true;
-      } else {
-        state.isAuthenticated = false;
-      }
-    });
+    builder.addCase(
+      checkAuthThunk.fulfilled,
+      (state, action: PayloadAction<User | null>) => {
+        state.isLoading = false;
+        state.isInitialized = true;
+        if (action.payload) {
+          state.user = action.payload;
+          state.isAuthenticated = true;
+        } else {
+          state.isAuthenticated = false;
+        }
+      },
+    );
     builder.addCase(checkAuthThunk.rejected, (state) => {
       state.isLoading = false;
       state.isInitialized = true;
@@ -224,25 +238,51 @@ export const { setUser, logout, clearError } = authSlice.actions;
 // Selectors
 export const selectAuth = (state: RootState) => state?.auth;
 export const selectUser = (state: RootState) => state?.auth?.user ?? null;
-export const selectIsAuthenticated = (state: RootState) => Boolean(state?.auth?.isAuthenticated);
+export const selectIsAuthenticated = (state: RootState) =>
+  Boolean(state?.auth?.isAuthenticated);
 
 export const selectRoleName = (state: RootState): RoleName => {
   const user = state?.auth?.user;
   if (!user) return "unknown";
 
-  let rawRole = "";
+  let roleName = "";
   if (typeof user.role === "string") {
-    rawRole = user.role;
+    roleName = user.role;
   } else if (user.role && typeof (user.role as any).name === "string") {
-    rawRole = (user.role as any).name;
-  } else if (user.jobTitle && typeof user.jobTitle === "string") {
-    rawRole = user.jobTitle;
+    roleName = (user.role as any).name;
   }
 
-  const normalized = rawRole.toLowerCase();
-  if (normalized.includes("admin") || normalized.includes("super")) return "admin";
-  if (normalized.includes("agent") || normalized.includes("support") || normalized.includes("specialist") || normalized.includes("engineer")) return "agent";
-  if (normalized.includes("customer") || normalized.includes("user")) return "customer";
+  if (roleName) {
+    const normalized = roleName.toLowerCase();
+    if (normalized.includes("admin") || normalized.includes("super"))
+      return "admin";
+    if (
+      normalized.includes("agent") ||
+      normalized.includes("manager") ||
+      normalized.includes("specialist") ||
+      normalized.includes("engineer")
+    )
+      return "agent";
+    if (normalized.includes("customer") || normalized.includes("user"))
+      return "customer";
+  }
+
+  // check jobTitle only if no explicit DB role was attached
+  if (user.jobTitle && typeof user.jobTitle === "string") {
+    const normalizedJob = user.jobTitle.toLowerCase();
+    if (
+      normalizedJob.includes("admin") ||
+      normalizedJob.includes("administrator")
+    )
+      return "admin";
+    if (
+      normalizedJob.includes("agent") ||
+      normalizedJob.includes("support specialist") ||
+      normalizedJob.includes("tier 2")
+    )
+      return "agent";
+  }
+
   return "customer";
 };
 

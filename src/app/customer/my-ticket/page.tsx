@@ -9,10 +9,10 @@ import { PortalFooter } from "@/src/components/portal/PortalFooter";
 export default function CustomerDashboard() {
   return (
     <ProtectedRoute allowedRoles={["customer", "agent", "admin"]}>
-      <div className="min-h-screen bg-background flex flex-col justify-between">
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
         <div>
           <TopNav activePage="dashboard" />
-          <main className="mx-auto max-w-[1440px] space-y-stack-lg px-container-margin py-stack-lg">
+          <main className="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8 py-8">
             <HeroSection />
             <MetricCards />
             <RecentTicketsTable />

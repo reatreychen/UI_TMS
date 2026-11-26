@@ -81,7 +81,13 @@ export async function fetchMyTickets(params?: {
     if (Array.isArray(payload?.items)) return payload.items;
     if (Array.isArray(payload?.data)) return payload.data;
     return [];
-  } catch {
+  } catch (err: any) {
+    if (err?.response?.status === 403) {
+      const arr: any = [];
+      arr.isForbidden = true;
+      arr.errorMessage = err?.response?.data?.message || "Missing required permission(s): tickets:read";
+      return arr;
+    }
     return [];
   }
 }
@@ -134,6 +140,9 @@ export interface UrgentSlaItem {
 
 export interface TicketAnalyticsOverview {
   totalTickets: number;
+  unassignedCount: number;
+  overdueCount: number;
+  averageResolutionMs: number;
   triageInsights: TriageInsightItem[];
   urgentSlaWatch: {
     atRiskCount: number;
@@ -146,6 +155,9 @@ export async function fetchTicketAnalyticsOverview(): Promise<TicketAnalyticsOve
   const payload = res.data?.data || res.data;
   return {
     totalTickets: payload?.totalTickets ?? 0,
+    unassignedCount: payload?.unassignedCount ?? 0,
+    overdueCount: payload?.overdueCount ?? 0,
+    averageResolutionMs: payload?.averageResolutionMs ?? 0,
     triageInsights: Array.isArray(payload?.triageInsights) ? payload.triageInsights : [],
     urgentSlaWatch: {
       atRiskCount: payload?.urgentSlaWatch?.atRiskCount ?? 0,
@@ -317,6 +329,8 @@ export interface ResourceRecord {
   description?: string;
   scheduleDate?: string;
   scheduleTime?: string;
+  fileUrl?: string;
+  thumbnailUrl?: string;
 }
 
 export async function fetchAllResources(query?: {
@@ -354,6 +368,15 @@ export async function deleteResource(id: string): Promise<void> {
 
 export async function bulkDeleteResources(ids: string[]): Promise<void> {
   await api.post("/resources/bulk-delete", { ids });
+}
+
+export async function uploadResourceFile(file: File): Promise<{ url: string; originalName: string; size: number }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await api.post("/resources/upload", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data?.data ?? res.data;
 }
 
 export async function bulkArchiveResources(ids: string[]): Promise<void> {

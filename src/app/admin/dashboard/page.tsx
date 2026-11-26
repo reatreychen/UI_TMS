@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { api } from "@/src/lib/api";
 
@@ -56,6 +56,8 @@ interface BackendUser {
   jobTitle?: string;
   isActive?: boolean;
   avatarUrl?: string;
+  departmentId?: string;
+  roleId?: string;
   role?: {
     id: string;
     name: string;
@@ -235,8 +237,12 @@ export default function AdminDashboardPage() {
         usersList = usersRes.data?.data || [];
         if (Array.isArray(usersList)) {
           setBackendUsers(usersList);
-          if (usersList.length > 0 && !selectedAgentId) {
-            setSelectedAgentId(usersList[0].id);
+          const agentsOnly = usersList.filter((u) => {
+            const r = (u.role?.name || "").toLowerCase();
+            return !(r === "user" && !u.departmentId && !u.jobTitle);
+          });
+          if (agentsOnly.length > 0 && !selectedAgentId) {
+            setSelectedAgentId(agentsOnly[0].id);
           }
         }
       } catch (err: any) {
@@ -280,6 +286,15 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Auto-refresh live dashboard telemetry every 30 seconds when visible
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void fetchDashboardData(true);
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
   useEffect(() => {
@@ -302,26 +317,42 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
-  // Compute Active Agents based on backend users or fallback
-  const computedAgents: AgentItem[] = backendUsers.length > 0
-    ? backendUsers.map((user) => {
+  // Filter for genuine support agents and staff (matching Agent Management page logic)
+  const agentUsers = useMemo(() => {
+    return backendUsers.filter((user) => {
+      const roleName = (user.role?.name || "").toLowerCase();
+      // Exclude standard customer accounts that have no department or jobTitle
+      if (roleName === "user" && !user.departmentId && !user.jobTitle) {
+        return false;
+      }
+      return true;
+    });
+  }, [backendUsers]);
+
+  // Compute Active Agents based on backend agent users or fallback
+  const computedAgents: AgentItem[] = agentUsers.length > 0
+    ? agentUsers.map((user) => {
+        const agentName = user.fullName || user.email || "Agent";
         const agentTicketsCount = tickets.filter(
-          (t) => t.agent.toLowerCase() === user.fullName.toLowerCase() && t.status !== "Closed"
+          (t) => (t.agent || "").toLowerCase() === agentName.toLowerCase() && t.status !== "Closed"
         ).length;
 
         return {
           id: user.id,
-          name: user.fullName,
+          name: agentName,
           role: user.jobTitle || user.role?.name || "Support Specialist",
           openTickets: agentTicketsCount,
           status: user.isActive !== false ? "online" : "offline",
-          avatar: user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName)}&background=0D8ABC&color=fff`,
-          alt: `${user.fullName} avatar`,
+          avatar: user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(agentName)}&background=0D8ABC&color=fff`,
+          alt: `${agentName} avatar`,
         };
       })
     : initialFallbackAgents;
 
   const visibleAgents = computedAgents.filter((agent) => !removedAgentNames.includes(agent.name));
+
+  const onlineAgentsCount = visibleAgents.filter((a) => a.status === "online").length;
+  const onlinePct = visibleAgents.length > 0 ? Math.round((onlineAgentsCount / visibleAgents.length) * 100) : 100;
 
   // Compute dynamic KPIs
   const totalTicketsCount = analyticsData?.totalTickets ?? (tickets.length > 0 ? tickets.length : 2842);
@@ -769,6 +800,15 @@ export default function AdminDashboardPage() {
             )}
           </div>
 
+          {/* View Full Reports Link */}
+          <Link
+            href="/admin/reports"
+            className="border border-outline-variant bg-surface-container-lowest text-on-surface hover:border-primary hover:text-primary px-3.5 py-2 rounded-lg font-medium text-body-md flex items-center gap-1.5 transition-all shadow-xs"
+          >
+            <span className="material-symbols-outlined text-[18px]">assessment</span>
+            <span className="hidden sm:inline">Executive Reports</span>
+          </Link>
+
           {/* Export Button */}
           <button
             onClick={handleExportReport}
@@ -849,7 +889,7 @@ export default function AdminDashboardPage() {
               support_agent
             </span>
             <span className="text-[12px] font-bold text-primary bg-primary-fixed-dim/20 px-2 py-0.5 rounded-full">
-              89% Util.
+              {onlinePct}% Online
             </span>
           </div>
           <p className="text-label-md text-outline font-label-md uppercase tracking-wider">
@@ -1373,20 +1413,21 @@ export default function AdminDashboardPage() {
                   onChange={(e) => setSelectedAgentId(e.target.value)}
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-body-md focus:ring-2 focus:ring-primary outline-none"
                 >
-                  {backendUsers.length > 0 ? (
-                    backendUsers.map((user) => (
+                  <option value="">Auto-assign to Department Agent</option>
+                  {(() => {
+                    const selCat = categories.find((c) => c.id === selectedCategoryId) as any;
+                    const selDeptId = selCat?.department_id || selCat?.department?.id;
+                    const deptAgents = selDeptId
+                      ? agentUsers.filter((u: any) => u.departmentId === selDeptId || u.department?.id === selDeptId)
+                      : agentUsers;
+                    const displayAgents = deptAgents.length > 0 ? deptAgents : agentUsers;
+
+                    return displayAgents.map((user: any) => (
                       <option key={user.id} value={user.id}>
-                        {user.fullName} ({user.jobTitle || user.role?.name || "Agent"})
+                        {user.fullName} ({user.jobTitle || user.department?.name || user.role?.name || "Agent"})
                       </option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="">Sarah Jenkins (Technical Tier 2)</option>
-                      <option value="">Marcus T. (Security Lead)</option>
-                      <option value="">Elena Rossi (Billing Expert)</option>
-                      <option value="">David Kim (API Support)</option>
-                    </>
-                  )}
+                    ));
+                  })()}
                 </select>
               </div>
 
@@ -1519,7 +1560,7 @@ export default function AdminDashboardPage() {
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-body-md focus:ring-2 focus:ring-primary outline-none font-medium"
                 >
                   <option value="">Unassigned</option>
-                  {backendUsers.map((user) => (
+                  {agentUsers.map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.fullName} ({user.jobTitle || user.role?.name || "Agent"})
                     </option>
@@ -1583,8 +1624,9 @@ export default function AdminDashboardPage() {
                   onChange={(e) => setTargetAgentId(e.target.value)}
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-body-md focus:ring-2 focus:ring-primary outline-none font-medium"
                 >
-                  {backendUsers
-                    .filter((u) => u.fullName.toLowerCase() !== reassignAgent.name.toLowerCase())
+                  <option value="">Select an agent</option>
+                  {agentUsers
+                    .filter((u) => (u.fullName || "").toLowerCase() !== (reassignAgent?.name || "").toLowerCase())
                     .map((user) => (
                       <option key={user.id} value={user.id}>
                         {user.fullName} ({user.jobTitle || user.role?.name || "Agent"})

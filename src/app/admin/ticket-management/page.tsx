@@ -54,6 +54,7 @@ function formatDate(value?: string) {
 }
 
 function formatDuration(milliseconds: number) {
+  if (!milliseconds || milliseconds <= 0) return "—";
   const minutes = Math.max(1, Math.round(milliseconds / 60000));
   if (minutes < 60) return `${minutes}m`;
 
@@ -137,6 +138,15 @@ export default function TicketManagementPage() {
   const [triageInsights, setTriageInsights] = useState<TriageInsightItem[]>([]);
   const [urgentSlaItems, setUrgentSlaItems] = useState<UrgentSlaItem[]>([]);
   const [atRiskCount, setAtRiskCount] = useState<number>(0);
+  const [globalMetrics, setGlobalMetrics] = useState<{
+    unassignedCount: number;
+    overdueCount: number;
+    averageResolutionMs: number;
+  }>({
+    unassignedCount: 0,
+    overdueCount: 0,
+    averageResolutionMs: 0,
+  });
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(true);
 
   useEffect(() => {
@@ -146,6 +156,11 @@ export default function TicketManagementPage() {
         setTriageInsights(data.triageInsights);
         setUrgentSlaItems(data.urgentSlaWatch.items);
         setAtRiskCount(data.urgentSlaWatch.atRiskCount);
+        setGlobalMetrics({
+          unassignedCount: data.unassignedCount,
+          overdueCount: data.overdueCount,
+          averageResolutionMs: data.averageResolutionMs,
+        });
       })
       .catch((err) => console.error("Failed to load analytics overview:", err))
       .finally(() => setIsLoadingAnalytics(false));
@@ -215,7 +230,7 @@ export default function TicketManagementPage() {
     const resolvedTickets = tickets.filter(
       (ticket) => ticket.resolvedAt && ticket.createdAt
     );
-    const averageResolution = resolvedTickets.length
+    const pageAverageResolution = resolvedTickets.length
       ? resolvedTickets.reduce(
           (total, ticket) =>
             total + (new Date(ticket.resolvedAt as string).getTime() - new Date(ticket.createdAt).getTime()),
@@ -224,12 +239,12 @@ export default function TicketManagementPage() {
       : 0;
 
     return {
-      overdue: overdueTickets.length,
+      overdue: globalMetrics.overdueCount || overdueTickets.length,
       critical: tickets.filter((ticket) => ticket.priority === "CRITICAL").length,
-      averageResolution,
-      unassigned: tickets.filter((ticket) => !ticket.assignedAgentId).length,
+      averageResolution: globalMetrics.averageResolutionMs || pageAverageResolution,
+      unassigned: globalMetrics.unassignedCount || tickets.filter((ticket) => !ticket.assignedAgentId).length,
     };
-  }, [statsNow, tickets]);
+  }, [globalMetrics, statsNow, tickets]);
 
   const clearFilters = () => {
     setCurrentPage(1);

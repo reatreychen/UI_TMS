@@ -23,6 +23,8 @@ function buildChartPath(points: Array<{ x: number; y: number }>) {
 export default function ReportsPage() {
   const [dateRange, setDateRange] = useState("Last 30 Days");
   const [department, setDepartment] = useState("All Departments");
+  const [appliedDateRange, setAppliedDateRange] = useState("Last 30 Days");
+  const [appliedDepartment, setAppliedDepartment] = useState("All Departments");
   const [isApplying, setIsApplying] = useState(false);
   const [hoveredPoint, setHoveredPoint] = useState<{ day: string; volume: number; resolved: number; x: number; y: number } | null>(null);
   const [showToast, setShowToast] = useState(false);
@@ -31,6 +33,7 @@ export default function ReportsPage() {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [reportData, setReportData] = useState<AdminReportAnalytics | null>(null);
   const [reportError, setReportError] = useState("");
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   const totalTickets = reportData?.totalTickets ?? 0;
   const slaComplianceValue = reportData?.slaCompliance;
@@ -38,16 +41,17 @@ export default function ReportsPage() {
   const currentKPI = {
     sla: slaComplianceValue !== null && slaComplianceValue !== undefined
       ? `${slaComplianceValue}%`
-      : totalTickets > 0 ? "96.2%" : "100%",
-    slaDiff: "+2.4%",
-    resTime: reportData?.averageResolutionHours
+      : "—",
+    slaDiff: reportData?.slaDiff || "+0.0%",
+    resTime: reportData?.averageResolutionHours !== null && reportData?.averageResolutionHours !== undefined
       ? formatHours(reportData.averageResolutionHours)
-      : totalTickets > 0 ? "2h 45m" : "0h 0m",
-    resDiff: "-18m",
-    cost: totalTickets > 0 ? `$${(150 / Math.max(totalTickets, 1)).toFixed(2)}` : "$0.00",
+      : "—",
+    resDiff: reportData?.resolutionDiff || "0m",
+    ticketDiff: reportData?.ticketDiff || "+0%",
     csat: reportData?.avgRating !== null && reportData?.avgRating !== undefined
       ? String(reportData.avgRating)
-      : "5.0",
+      : "—",
+    csatTrend: reportData?.csatTrend || "Stable",
   };
 
   // Data points for interactive SVG chart
@@ -69,6 +73,38 @@ export default function ReportsPage() {
     setTimeout(() => setShowToast(false), 3500);
   };
 
+  // Fetch report data
+  const loadReportData = async (silent = false) => {
+    if (!silent) setIsApplying(true);
+    setReportError("");
+
+    try {
+      const data = await fetchAdminReportAnalytics(appliedDateRange, appliedDepartment);
+      setReportData(data);
+      setLastRefreshed(new Date());
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Could not load report data.");
+    } finally {
+      if (!silent) setIsApplying(false);
+    }
+  };
+
+  // Initial and on applied filter change
+  useEffect(() => {
+    void loadReportData(false);
+  }, [appliedDateRange, appliedDepartment]);
+
+  // Real-time Auto-Polling (every 30 seconds if tab is active)
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void loadReportData(true);
+      }
+    }, 30000);
+
+    return () => clearInterval(pollInterval);
+  }, [appliedDateRange, appliedDepartment]);
+
   // Listen to global admin header search
   useEffect(() => {
     const handleSearch = (e: Event) => {
@@ -82,33 +118,10 @@ export default function ReportsPage() {
     return () => window.removeEventListener("admin-search", handleSearch);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadReportData() {
-      setIsApplying(true);
-      setReportError("");
-
-      try {
-        const data = await fetchAdminReportAnalytics(dateRange, department);
-        if (!cancelled) setReportData(data);
-      } catch (error) {
-        if (!cancelled) {
-          setReportError(error instanceof Error ? error.message : "Could not load report data.");
-        }
-      } finally {
-        if (!cancelled) setIsApplying(false);
-      }
-    }
-
-    void loadReportData();
-    return () => {
-      cancelled = true;
-    };
-  }, [dateRange, department]);
-
   const handleApplyFilters = () => {
-    triggerToast(`Analytics updated for ${dateRange} (${department}).`);
+    setAppliedDateRange(dateRange);
+    setAppliedDepartment(department);
+    triggerToast(`Applying filters for ${dateRange} (${department})...`);
   };
 
   const handleExportCSV = () => {
@@ -245,15 +258,38 @@ export default function ReportsPage() {
       {/* Filter Bar */}
       <section className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="font-headline-lg text-headline-lg text-on-surface font-bold">
-            Performance Analytics
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="font-headline-lg text-headline-lg text-on-surface font-bold">
+              Performance Analytics & Reports
+            </h2>
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Sync
+            </span>
+          </div>
           <p className="text-secondary font-body-md mt-1">
-            Real-time tracking of operational metrics from <span className="font-bold text-primary">{totalTickets} system tickets</span>.
+            Real-time analytics and audit metrics from <span className="font-bold text-primary">{totalTickets} system tickets</span>.
+            {lastRefreshed && (
+              <span className="text-xs text-outline ml-2">
+                (Synced {lastRefreshed.toLocaleTimeString()})
+              </span>
+            )}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-xl border border-outline-variant shadow-xs">
+          {/* Manual Refresh */}
+          <button
+            onClick={() => void loadReportData(false)}
+            disabled={isApplying}
+            title="Refresh Live Data"
+            className="p-2 text-secondary hover:text-primary hover:bg-surface-container-low rounded-lg transition-colors border-r border-outline-variant pr-3 cursor-pointer disabled:opacity-50 flex items-center gap-1"
+          >
+            <span className={`material-symbols-outlined text-[18px] ${isApplying ? "animate-spin text-primary" : ""}`}>
+              sync
+            </span>
+          </button>
+
           {/* Date Range Selector */}
           <div className="flex items-center gap-2 px-3 py-2 border-r border-outline-variant">
             <span className="material-symbols-outlined text-primary text-sm">calendar_today</span>
@@ -262,6 +298,7 @@ export default function ReportsPage() {
               onChange={(e) => setDateRange(e.target.value)}
               className="bg-transparent border-none focus:ring-0 text-body-md font-medium text-on-surface cursor-pointer outline-none"
             >
+              <option value="All Time">All Time</option>
               <option value="Last 30 Days">Last 30 Days</option>
               <option value="Last Quarter">Last Quarter</option>
               <option value="Year to Date">Year to Date</option>
@@ -310,8 +347,15 @@ export default function ReportsPage() {
             <span className="material-symbols-outlined p-2 bg-blue-50 text-primary rounded-lg">
               verified_user
             </span>
-            <span className="text-green-600 font-bold text-xs flex items-center gap-1 bg-green-50 px-2 py-0.5 rounded-full">
-              <span className="material-symbols-outlined text-[14px]">trending_up</span> {currentKPI.slaDiff}
+            <span className={`font-bold text-xs flex items-center gap-1 px-2 py-0.5 rounded-full ${
+              currentKPI.slaDiff.startsWith("-")
+                ? "text-red-600 bg-red-50"
+                : "text-green-600 bg-green-50"
+            }`}>
+              <span className="material-symbols-outlined text-[14px]">
+                {currentKPI.slaDiff.startsWith("-") ? "trending_down" : "trending_up"}
+              </span>{" "}
+              {currentKPI.slaDiff}
             </span>
           </div>
           <p className="text-secondary font-label-md mb-1 uppercase tracking-tight font-semibold">
@@ -326,8 +370,15 @@ export default function ReportsPage() {
             <span className="material-symbols-outlined p-2 bg-purple-50 text-purple-600 rounded-lg">
               timer
             </span>
-            <span className="text-red-600 font-bold text-xs flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded-full">
-              <span className="material-symbols-outlined text-[14px]">trending_down</span> {currentKPI.resDiff}
+            <span className={`font-bold text-xs flex items-center gap-1 px-2 py-0.5 rounded-full ${
+              currentKPI.resDiff.startsWith("+")
+                ? "text-red-600 bg-red-50"
+                : "text-green-600 bg-green-50"
+            }`}>
+              <span className="material-symbols-outlined text-[14px]">
+                {currentKPI.resDiff.startsWith("+") ? "trending_up" : "trending_down"}
+              </span>{" "}
+              {currentKPI.resDiff}
             </span>
           </div>
           <p className="text-secondary font-label-md mb-1 uppercase tracking-tight font-semibold">
@@ -342,8 +393,15 @@ export default function ReportsPage() {
             <span className="material-symbols-outlined p-2 bg-green-50 text-green-600 rounded-lg">
               confirmation_number
             </span>
-            <span className="text-green-600 font-bold text-xs flex items-center gap-1 bg-green-50 px-2 py-0.5 rounded-full">
-              <span className="material-symbols-outlined text-[14px]">trending_up</span> +12%
+            <span className={`font-bold text-xs flex items-center gap-1 px-2 py-0.5 rounded-full ${
+              currentKPI.ticketDiff.startsWith("-")
+                ? "text-red-600 bg-red-50"
+                : "text-green-600 bg-green-50"
+            }`}>
+              <span className="material-symbols-outlined text-[14px]">
+                {currentKPI.ticketDiff.startsWith("-") ? "trending_down" : "trending_up"}
+              </span>{" "}
+              {currentKPI.ticketDiff}
             </span>
           </div>
           <p className="text-secondary font-label-md mb-1 uppercase tracking-tight font-semibold">
@@ -359,7 +417,7 @@ export default function ReportsPage() {
               star
             </span>
             <span className="text-amber-600 font-bold text-xs bg-amber-50 px-2 py-0.5 rounded-full">
-              High Stability
+              {currentKPI.csatTrend}
             </span>
           </div>
           <p className="text-secondary font-label-md mb-1 uppercase tracking-tight font-semibold">

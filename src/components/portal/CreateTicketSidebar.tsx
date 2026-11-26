@@ -1,54 +1,45 @@
 import Link from "next/link";
-import { BookOpen, ShieldCheck, HelpCircle } from "lucide-react";
 import { resources } from "@/src/constants/knowledgeBase";
 
 export function CreateTicketSidebar() {
   return (
-    <aside className="lg:col-span-4 flex flex-col gap-stack-lg">
+    <aside className="lg:col-span-4 flex flex-col gap-6">
       {/* Helpful Resources Card */}
-      <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
-        {/* Card Header */}
-        <div className="flex items-center gap-2 border-b border-outline-variant bg-surface-container-high px-stack-md py-stack-sm">
-          {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+        <div className="flex items-center gap-2.5 border-b border-slate-200 bg-slate-50 px-5 py-4">
           <span
-            className="material-symbols-outlined text-primary"
+            className="material-symbols-outlined text-blue-600 text-[20px]"
             aria-hidden="true"
           >
             auto_stories
           </span>
-          <h3 className="text-headline-md font-semibold">Helpful Resources</h3>
+          <h3 className="font-display text-base font-bold text-slate-900">Helpful Resources</h3>
         </div>
 
-        {/* Resource Links */}
-        <div className="space-y-stack-sm p-stack-md">
+        <div className="space-y-2 p-4">
           {resources.map(({ icon: Icon, title, description, href }) => (
             <Link
               key={title}
               href={href}
-              className="group flex items-start gap-stack-sm rounded-lg p-stack-sm transition-all hover:bg-surface-container-lowest"
+              className="group flex items-start gap-3 rounded-xl p-3 transition-colors hover:bg-slate-50"
             >
-              <Icon
-                className="mt-0.5 size-5 shrink-0 text-on-surface-variant transition-colors group-hover:text-primary"
-                aria-hidden
-                strokeWidth={2}
-              />
-              <div className="space-y-base">
-                <p className="text-body-md font-bold text-on-surface">
+              <div className="p-2 rounded-lg bg-slate-100 text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors shrink-0">
+                <Icon className="size-4" aria-hidden strokeWidth={2} />
+              </div>
+              <div className="space-y-0.5 min-w-0">
+                <p className="text-sm font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
                   {title}
                 </p>
-                <p className="text-label-md text-on-surface-variant">
-                  {description}
-                </p>
+                <p className="text-xs text-slate-500 leading-relaxed">{description}</p>
               </div>
             </Link>
           ))}
         </div>
 
-        {/* Footer CTA */}
-        <div className="border-t border-outline-variant bg-surface-container-lowest px-stack-md py-stack-sm">
+        <div className="border-t border-slate-200 bg-slate-50 px-5 py-3.5">
           <Link
             href="/customer/knowledge-base"
-            className="block w-full text-center text-body-md font-bold text-primary hover:underline"
+            className="block w-full text-center text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline"
           >
             View Full Knowledge Base
           </Link>
@@ -56,20 +47,20 @@ export function CreateTicketSidebar() {
       </div>
 
       {/* Pro-Tip Banner Card */}
-      <div className="group relative h-48 cursor-pointer overflow-hidden rounded-xl shadow-sm">
+      <div className="group relative h-48 overflow-hidden rounded-2xl border border-slate-200 shadow-xs bg-slate-900">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkMTJxVjr6-58BjRKhtxQKOnBmh2r5040ofE_PIppH94X2DfHC11PD4-TeQMzUD5uS8sK07ong_8H3DMGw0xC4Q306eV_vrkmffwKEdzuhLu8lVH3jiBwcC-bD4uFbOYHbDxluFlCj8jl8n35aIg12crSizjczYOcIn2-DbYM9kyi3Ad9rgTL5cr0Wu3ov2Gg6Slay09bbuMMXyodjiODWwuMw2uEhf2Xwk-Fq7F8l60K5h8LNWeOKzloVkrql9P-jcThJObUNTtwY"
-          alt="Professional support workspace showing keyboard and dashboard"
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+          src="/images/guide_desk_bg.jpg"
+          alt="Support troubleshooting workspace"
+          className="absolute inset-0 h-full w-full object-cover opacity-55 transition-transform duration-500 group-hover:scale-105"
         />
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent" />
-        <div className="absolute bottom-0 left-0 p-stack-md text-white">
-          <p className="text-label-md font-bold uppercase tracking-wider opacity-80">
-            PRO TIP
-          </p>
-          <h4 className="text-headline-md font-semibold">
-            Attach logs for faster resolution
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-transparent" />
+        <div className="absolute bottom-0 left-0 p-5 text-white">
+          <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-[10px] font-bold uppercase tracking-wider mb-2">
+            Pro Tip
+          </span>
+          <h4 className="font-display text-lg font-bold text-white leading-snug">
+            Attach screenshots or error logs for faster resolution
           </h4>
         </div>
       </div>

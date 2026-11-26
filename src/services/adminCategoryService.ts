@@ -13,6 +13,7 @@ export interface Category {
   department_id: string;
   department?: AdminDepartment;
   itemCount?: number;
+  isActive?: boolean;
 }
 
 export interface PaginatedCategories {
@@ -34,12 +35,14 @@ export interface QueryCategoryParams {
 
 export interface CreateCategoryPayload {
   name: string;
-  department_id?: string;
+  department_id?: string | null;
+  isActive?: boolean;
 }
 
 export interface UpdateCategoryPayload {
   name?: string;
-  department_id?: string;
+  department_id?: string | null;
+  isActive?: boolean;
 }
 
 export const adminCategoryService = {

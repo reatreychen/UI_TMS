@@ -74,10 +74,26 @@ export default function LoginPage() {
     <div className="flex flex-col min-h-screen bg-surface-dim font-body-md text-on-background">
 
       {/* TMS Pro Customer Portal NavBar */}
-      <header className="bg-surface sticky top-0 z-50 w-full border-b border-outline-variant shadow-sm">
-        <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between px-container-margin py-3">
+      <header className="bg-white/95 backdrop-blur-md sticky top-0 z-50 w-full border-b border-outline-variant shadow-xs">
+        <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between px-container-margin py-2.5">
           <div className="flex items-center gap-8">
-            <Link href="/customer/knowledge-base" className="text-headline-md font-bold text-primary">TMS Pro</Link>
+            <Link href="/customer/knowledge-base" className="group flex items-center gap-2.5 transition-transform hover:scale-[1.02] active:scale-95">
+              <div className="relative w-9 h-9 rounded-xl overflow-hidden shadow-xs border border-primary/20 bg-primary/10 flex items-center justify-center group-hover:shadow-md transition-all">
+                <img
+                  src="/images/tms_pro_logo.jpg"
+                  alt="TMS Pro Logo"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-lg font-extrabold tracking-tight text-primary leading-tight">
+                  TMS <span className="text-secondary font-bold">Pro</span>
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/70 leading-none">
+                  Enterprise
+                </span>
+              </div>
+            </Link>
           </div>
         </div>
       </header>

@@ -1,4 +1,4 @@
-import { CalendarDays, Download, ChevronDown, RefreshCw, Radio } from "lucide-react";
+import { CalendarDays, Download, RefreshCw, Radio, Building2 } from "lucide-react";
 
 interface ReportsHeaderProps {
   lastUpdated: Date | null;
@@ -7,6 +7,11 @@ interface ReportsHeaderProps {
   onToggleAutoRefresh: () => void;
   onManualRefresh: () => void;
   pollIntervalSec?: number;
+  dateRange: string;
+  onDateRangeChange: (range: string) => void;
+  selectedDepartment: string;
+  onDepartmentChange: (dept: string) => void;
+  onExportReport: () => void;
 }
 
 export function ReportsHeader({
@@ -16,6 +21,11 @@ export function ReportsHeader({
   onToggleAutoRefresh,
   onManualRefresh,
   pollIntervalSec = 15,
+  dateRange,
+  onDateRangeChange,
+  selectedDepartment,
+  onDepartmentChange,
+  onExportReport,
 }: ReportsHeaderProps) {
   function formatLastUpdated() {
     if (!lastUpdated) return "Never";
@@ -62,7 +72,7 @@ export function ReportsHeader({
             onClick={onManualRefresh}
             disabled={isRefreshing}
             title="Refresh real-time data now"
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw
               className={`size-3.5 text-primary ${isRefreshing ? "animate-spin" : ""}`}
@@ -76,7 +86,7 @@ export function ReportsHeader({
             type="button"
             onClick={onToggleAutoRefresh}
             title={autoRefreshEnabled ? "Pause auto-refreshing" : "Resume auto-refreshing"}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
               autoRefreshEnabled
                 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -87,13 +97,44 @@ export function ReportsHeader({
           </button>
         </div>
 
-        <div className="flex cursor-pointer items-center rounded-lg border border-outline-variant bg-white px-4 py-2 shadow-xs transition-colors hover:border-primary">
-          <CalendarDays aria-hidden className="mr-2 size-5" />
-          <span className="font-label-md text-label-md">Last 30 Days</span>
-          <ChevronDown aria-hidden className="ml-2 size-5" />
+        {/* Department Action Filter */}
+        <div className="relative flex items-center rounded-lg border border-outline-variant bg-white px-3 py-2 shadow-xs transition-colors hover:border-primary">
+          <Building2 className="mr-2 size-4 text-slate-500" />
+          <select
+            value={selectedDepartment}
+            onChange={(e) => onDepartmentChange(e.target.value)}
+            className="bg-transparent font-label-md text-label-md outline-none cursor-pointer text-slate-800 pr-2"
+          >
+            <option value="All Departments">All Departments</option>
+            <option value="IT Support">IT Support</option>
+            <option value="Technical">Technical Support</option>
+            <option value="Web Support">Web Support</option>
+            <option value="Customer Support">Customer Support</option>
+          </select>
         </div>
 
-        <button className="flex items-center rounded-lg bg-primary px-5 py-2.5 font-label-md text-label-md font-bold text-white shadow-md transition-all hover:bg-primary-container active:scale-95">
+        {/* Date Range Action Filter */}
+        <div className="relative flex items-center rounded-lg border border-outline-variant bg-white px-3 py-2 shadow-xs transition-colors hover:border-primary">
+          <CalendarDays aria-hidden className="mr-2 size-4 text-slate-500" />
+          <select
+            value={dateRange}
+            onChange={(e) => onDateRangeChange(e.target.value)}
+            className="bg-transparent font-label-md text-label-md outline-none cursor-pointer text-slate-800 pr-2"
+          >
+            <option value="Last 7 Days">Last 7 Days</option>
+            <option value="Last 30 Days">Last 30 Days</option>
+            <option value="Last 90 Days">Last 90 Days</option>
+            <option value="Year to Date">Year to Date</option>
+            <option value="All Time">All Time</option>
+          </select>
+        </div>
+
+        {/* Export Button Action */}
+        <button
+          onClick={onExportReport}
+          title="Export CSV Report"
+          className="flex items-center rounded-lg bg-primary px-5 py-2.5 font-label-md text-label-md font-bold text-white shadow-md transition-all hover:bg-primary-container active:scale-95 cursor-pointer"
+        >
           <Download aria-hidden className="mr-2 size-5" />
           Export
         </button>

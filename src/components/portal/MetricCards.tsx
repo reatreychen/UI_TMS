@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   Archive,
   CheckCircle2,
@@ -7,8 +8,10 @@ import {
   RefreshCw,
   type LucideIcon,
 } from "lucide-react";
-
 import { ticketMetrics } from "@/src/constants/tickets";
+import { useAppSelector } from "@/src/store/hooks";
+import { selectUser } from "@/src/store/slices/authSlice";
+import { fetchMyTickets } from "@/src/services/portalService";
 
 const iconMap: Record<(typeof ticketMetrics)[number]["icon"], LucideIcon> = {
   mail: Mail,
@@ -17,25 +20,33 @@ const iconMap: Record<(typeof ticketMetrics)[number]["icon"], LucideIcon> = {
   archive: Archive,
 };
 
-import { useState, useEffect } from "react";
-import { useAppSelector } from "@/src/store/hooks";
-import { selectUser } from "@/src/store/slices/authSlice";
-import { fetchMyTickets } from "@/src/services/portalService";
-
 export function MetricCards() {
   const currentUser = useAppSelector(selectUser);
   const [metrics, setMetrics] = useState(ticketMetrics);
 
   useEffect(() => {
-    if (currentUser?.id) {
-      fetchMyTickets({ customerId: currentUser.id, limit: 100 }).then((data) => {
-        let open = 0, inProgress = 0, resolved = 0, closed = 0;
-        data.forEach((t: any) => {
-          if (t.status === "OPEN" || t.status === "PENDING") open++;
-          else if (t.status === "IN_PROGRESS" || t.status === "ASSIGNED") inProgress++;
-          else if (t.status === "RESOLVED") resolved++;
-          else if (t.status === "CLOSED") closed++;
-        });
+    fetchMyTickets(
+      currentUser?.id ? { customerId: currentUser.id, limit: 100 } : { limit: 100 }
+    )
+      .then((data) => {
+        let open = 0,
+          inProgress = 0,
+          resolved = 0,
+          closed = 0;
+        if (Array.isArray(data)) {
+          data.forEach((t) => {
+            const st = (t.status || "").toUpperCase();
+            if (st === "OPEN" || st === "PENDING") open++;
+            else if (
+              st === "IN_PROGRESS" ||
+              st === "ASSIGNED" ||
+              st === "IN PROGRESS"
+            )
+              inProgress++;
+            else if (st === "RESOLVED") resolved++;
+            else if (st === "CLOSED") closed++;
+          });
+        }
 
         setMetrics([
           { ...ticketMetrics[0], count: open },
@@ -43,34 +54,32 @@ export function MetricCards() {
           { ...ticketMetrics[2], count: resolved },
           { ...ticketMetrics[3], label: "Closed", count: closed },
         ]);
-      }).catch(err => console.error("Failed to fetch stats", err));
-    }
+      })
+      .catch((err) => console.error("Failed to fetch stats", err));
   }, [currentUser]);
 
   return (
-    <div className="grid grid-cols-1 gap-gutter sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {metrics.map(({ label, count, description, icon, iconClass }) => {
         const Icon = iconMap[icon];
         return (
           <div
             key={label}
-            className="rounded-xl border border-outline-variant bg-surface-container-lowest p-stack-md shadow-sm transition-transform duration-200 hover:-translate-y-0.5"
+            className="rounded-2xl border border-slate-200 bg-white p-5 soft-shadow transition-colors hover:border-slate-300"
           >
-            <div className="mb-4 flex items-start justify-between">
-              <div className={`rounded-lg p-2 ${iconClass}`}>
-                <Icon aria-hidden className="size-5" strokeWidth={2} />
-              </div>
-              <span className="text-label-md uppercase tracking-wider text-outline">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 {label}
               </span>
+              <div className={`rounded-lg p-2 ${iconClass}`}>
+                <Icon aria-hidden className="size-4" strokeWidth={2} />
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="text-headline-lg font-semibold text-on-surface">
+            <div className="space-y-0.5">
+              <p className="text-2xl font-bold text-slate-900 tabular-nums">
                 {count.toLocaleString()}
               </p>
-              <p className="text-body-md text-on-surface-variant">
-                {description}
-              </p>
+              <p className="text-xs text-slate-500">{description}</p>
             </div>
           </div>
         );

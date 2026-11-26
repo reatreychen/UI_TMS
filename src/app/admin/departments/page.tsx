@@ -6,7 +6,7 @@ import {
   adminAgentService,
   AgentRecord,
 } from "@/src/services/adminAgentService";
-import { AdminDepartment } from "@/src/services/adminUserService";
+import { AdminDepartment, AdminRole } from "@/src/services/adminUserService";
 
 function getErrorMessage(error: unknown) {
   if (typeof error === "object" && error !== null && "response" in error) {
@@ -35,13 +35,15 @@ export default function DepartmentsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [departments, setDepartments] = useState<AdminDepartment[]>([]);
+  const [systemRoles, setSystemRoles] = useState<AdminRole[]>([]);
   const [agentRoleId, setAgentRoleId] = useState<string | null>(null);
+  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [rowsPerPage] = useState(10);
 
   // Add Agent Form State
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState("Tier I Specialist");
+  const [newRole, setNewRole] = useState("Senior Specialist");
   const [newDepartmentId, setNewDepartmentId] = useState("");
 
   const [agents, setAgents] = useState<AgentRecord[]>([]);
@@ -63,7 +65,17 @@ export default function DepartmentsPage() {
 
         setAgents(data.agents);
         setDepartments(data.departments);
+        setSystemRoles(data.roles || []);
         setAgentRoleId(data.agentRoleId);
+
+        if (data.roles && data.roles.length > 0) {
+          const defaultRole =
+            data.roles.find((r) => r.id === data.agentRoleId) ||
+            data.roles.find((r) => r.name.toLowerCase().includes("agent") || r.name.toLowerCase().includes("support")) ||
+            data.roles[0];
+          setSelectedRoleId(defaultRole?.id || "");
+        }
+
         setNewDepartmentId((current) => current || data.departments[0]?.id || "");
 
         try {
@@ -172,7 +184,7 @@ export default function DepartmentsPage() {
             jobTitle: newRole,
             departmentId: newDepartmentId || undefined,
           },
-          agentRoleId
+          selectedRoleId || agentRoleId
         );
 
         setAgents((current) => [created, ...current]);
@@ -264,13 +276,6 @@ export default function DepartmentsPage() {
             </span>
             <span>{isExporting ? "Exporting..." : "Export Data"}</span>
           </button>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg font-body-md text-body-md font-semibold hover:opacity-90 transition-all active:scale-95 shadow-sm cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-[20px]">person_add</span>
-            <span>Add Agent</span>
-          </button>
         </div>
       </div>
 
@@ -353,9 +358,11 @@ export default function DepartmentsPage() {
             className="py-2 pl-3 pr-8 bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md text-secondary focus:ring-primary focus:border-primary outline-none cursor-pointer"
           >
             <option value="Queue: All">Department: All</option>
-            <option value="Technical Support">Technical Support</option>
-            <option value="Billing & Accounts">Billing &amp; Accounts</option>
-            <option value="Enterprise Sales">Enterprise Sales / Critical</option>
+            {departments.map((dept) => (
+              <option key={dept.id} value={dept.name}>
+                {dept.name}
+              </option>
+            ))}
           </select>
 
           {/* Status Filter Dropdown */}
@@ -610,7 +617,7 @@ export default function DepartmentsPage() {
 
               <div>
                 <label className="block text-xs font-bold text-outline uppercase mb-1">
-                  Tier / Role
+                  Tier / Job Title
                 </label>
                 <select
                   value={newRole}
@@ -624,6 +631,25 @@ export default function DepartmentsPage() {
                   <option value="Junior Specialist">Junior Specialist</option>
                 </select>
               </div>
+
+              {systemRoles.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-outline uppercase mb-1">
+                    System Permission Role
+                  </label>
+                  <select
+                    value={selectedRoleId}
+                    onChange={(e) => setSelectedRoleId(e.target.value)}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-body-md focus:ring-2 focus:ring-primary outline-none cursor-pointer"
+                  >
+                    {systemRoles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-outline uppercase mb-1">

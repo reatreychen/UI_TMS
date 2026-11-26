@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Send, CheckCircle2, AlertCircle, RefreshCw, X, MessageSquare, ExternalLink } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Send, CheckCircle2, RefreshCw, X, MessageSquare, ExternalLink } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   fetchTelegramStatus,
@@ -16,16 +16,34 @@ interface TelegramBotModalProps {
 }
 
 export function TelegramBotModal({ isOpen, onClose }: TelegramBotModalProps) {
-  const [loading, setLoading] = useState(true);
   const [sendingTest, setSendingTest] = useState(false);
   const [discovering, setDiscovering] = useState(false);
-  const [botInfo, setBotInfo] = useState<any>(null);
+  const [botInfo, setBotInfo] = useState<{ firstName?: string; username?: string } | null>(null);
   const [chatId, setChatIdInput] = useState("");
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const data = await fetchTelegramStatus();
+      setBotInfo(data.botInfo || null);
+      if (data.targetChatId) {
+        setChatIdInput(data.targetChatId);
+      } else {
+        const disc = await discoverTelegramChatId();
+        if (disc.chatId) {
+          setChatIdInput(disc.chatId);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load Telegram status", err);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    loadStatus();
+    const timer = window.setTimeout(() => {
+      void loadStatus();
+    }, 0);
 
     // Auto poll for chat ID every 3 seconds while modal is open
     const interval = setInterval(async () => {
@@ -44,29 +62,11 @@ export function TelegramBotModal({ isOpen, onClose }: TelegramBotModalProps) {
       }
     }, 3000);
 
-    return () => clearInterval(interval);
-  }, [isOpen]);
-
-  const loadStatus = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchTelegramStatus();
-      setBotInfo(data.botInfo);
-      if (data.targetChatId) {
-        setChatIdInput(data.targetChatId);
-      } else {
-        // Attempt immediate auto discover
-        const disc = await discoverTelegramChatId();
-        if (disc.chatId) {
-          setChatIdInput(disc.chatId);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to load Telegram status", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => {
+      window.clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, [isOpen, loadStatus]);
 
   const handleSaveChatId = async () => {
     if (!chatId.trim()) {
@@ -129,7 +129,7 @@ export function TelegramBotModal({ isOpen, onClose }: TelegramBotModalProps) {
       onClick={onClose}
     >
       <div
-        className="bg-surface-container-lowest rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-outline-variant relative overflow-hidden"
+        className="bg-surface-container-lowest rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-outline-variant relative overflow-hidden animate-in zoom-in-95 duration-200 ease-out transform-gpu"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

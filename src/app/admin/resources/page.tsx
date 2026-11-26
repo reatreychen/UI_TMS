@@ -12,6 +12,7 @@ import {
   selectResources,
   selectResourceLoading,
 } from "@/src/store/slices/resourceSlice";
+import { uploadResourceFile } from "@/src/services/portalService";
 
 type ResourceStatus = "Published" | "Draft" | "Scheduled" | "Archived";
 type ResourceType = "Whitepaper" | "Case Study" | "Webinar" | "E-book" | "Guide" | "Video";
@@ -83,7 +84,8 @@ export default function ManageResourcesPage() {
   const [toastMsg, setToastMsg] = useState("");
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-  const [itemsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
@@ -107,6 +109,15 @@ export default function ManageResourcesPage() {
     const matchSearch = r.title.toLowerCase().includes(searchQuery.toLowerCase());
     return matchType && matchStatus && matchSearch;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(filtered.length, startIndex + itemsPerPage);
+  const paginatedResources = filtered.slice(startIndex, endIndex);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, filterStatus, searchQuery, itemsPerPage]);
 
   const toggleSelect = (id: string | number) => {
     setSelectedIds((prev) => {
@@ -182,19 +193,51 @@ export default function ManageResourcesPage() {
       });
   };
 
+  const DEFAULT_TYPE_IMAGES: Record<string, string> = {
+    "Case Study": "/images/solutions_hero_banner.jpg",
+    "Video": "/images/video_tutorial_bg.jpg",
+    "Webinar": "/images/support_hero_banner.jpg",
+    "E-book": "/images/ebook_library_bg.jpg",
+    "Whitepaper": "/images/security_whitepaper_bg.jpg",
+    "Guide": "/images/guide_desk_bg.jpg",
+  };
+
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
   const openAddModal = () => {
     setEditResource(null);
     setForm({ title: "", subtitle: "", type: "Whitepaper", status: "Draft", dateAdded: new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }), downloads: "--", views: "--", description: "", scheduleDate: "", scheduleTime: "" });
     setUploadedFileName(null);
-    setThumbnailPreview(null);
+    setUploadedFileUrl(null);
+    setThumbnailPreview(DEFAULT_TYPE_IMAGES["Whitepaper"]);
     setShowModal(true);
   };
 
   const openEditModal = (r: Resource) => {
     setEditResource(r);
-    setForm({ title: r.title, subtitle: r.subtitle, type: r.type, status: r.status, dateAdded: r.dateAdded, downloads: r.downloads, views: r.views, description: "", scheduleDate: "", scheduleTime: "" });
-    setUploadedFileName(null);
-    setThumbnailPreview(null);
+    const raw = rawResources.find((item) => String(item.id) === String(r.id));
+    setForm({
+      title: r.title,
+      subtitle: r.subtitle,
+      type: r.type,
+      status: r.status,
+      dateAdded: r.dateAdded,
+      downloads: r.downloads,
+      views: r.views,
+      description: raw?.description || "",
+      scheduleDate: raw?.scheduleDate || "",
+      scheduleTime: raw?.scheduleTime || "",
+    });
+    const parts = r.subtitle.split("•").map((s) => s.trim());
+    if (parts.length > 1) {
+      setUploadedFileName(parts[1]);
+    } else {
+      setUploadedFileName(null);
+    }
+    setUploadedFileUrl(raw?.fileUrl || null);
+    const existingImg = raw?.thumbnailUrl || (r as any)?.imgSrc || DEFAULT_TYPE_IMAGES[r.type] || "/images/guide_desk_bg.jpg";
+    setThumbnailPreview(existingImg);
     setShowModal(true);
   };
 
@@ -203,8 +246,9 @@ export default function ManageResourcesPage() {
       triggerToast("Title is required.", "error");
       return;
     }
-    const subtitle =
-      form.subtitle || `${form.type}${uploadedFileName ? " • " + uploadedFileName : ""}`;
+
+    const fileSuffix = uploadedFileName ? ` • ${uploadedFileName}` : "";
+    const finalSubtitle = `${form.type}${fileSuffix}`;
 
     if (editResource) {
       dispatch(
@@ -212,12 +256,14 @@ export default function ManageResourcesPage() {
           id: String(editResource.id),
           payload: {
             title: form.title,
-            subtitle,
+            subtitle: finalSubtitle,
             type: form.type,
             status: form.status,
             description: form.description,
             scheduleDate: form.scheduleDate,
             scheduleTime: form.scheduleTime,
+            ...(uploadedFileUrl ? { fileUrl: uploadedFileUrl } : {}),
+            ...(thumbnailPreview ? { thumbnailUrl: thumbnailPreview } : {}),
           },
         })
       )
@@ -225,6 +271,7 @@ export default function ManageResourcesPage() {
         .then(() => {
           triggerToast("Resource updated successfully.");
           setShowModal(false);
+          dispatch(fetchResourcesThunk({ type: filterType, status: filterStatus, q: searchQuery }));
         })
         .catch((err) => {
           console.error("Failed to update resource:", err);
@@ -234,7 +281,7 @@ export default function ManageResourcesPage() {
       dispatch(
         createResourceThunk({
           title: form.title,
-          subtitle,
+          subtitle: finalSubtitle,
           type: form.type,
           status: form.status,
           dateAdded: form.dateAdded,
@@ -243,12 +290,15 @@ export default function ManageResourcesPage() {
           description: form.description,
           scheduleDate: form.scheduleDate,
           scheduleTime: form.scheduleTime,
+          ...(uploadedFileUrl ? { fileUrl: uploadedFileUrl } : {}),
+          ...(thumbnailPreview ? { thumbnailUrl: thumbnailPreview } : {}),
         })
       )
         .unwrap()
         .then(() => {
           triggerToast("New resource added successfully.");
           setShowModal(false);
+          dispatch(fetchResourcesThunk({ type: filterType, status: filterStatus, q: searchQuery }));
         })
         .catch((err) => {
           console.error("Failed to create resource:", err);
@@ -257,24 +307,47 @@ export default function ManageResourcesPage() {
     }
   };
 
+  const processFileUpload = async (file: File) => {
+    setUploadedFileName(file.name);
+    try {
+      setIsUploading(true);
+      const res = await uploadResourceFile(file);
+      setUploadedFileUrl(res.url);
+    } catch (err) {
+      console.error("Cloudinary file upload error:", err);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file) setUploadedFileName(file.name);
+    if (file) processFileUpload(file);
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setUploadedFileName(file.name);
+    if (file) processFileUpload(file);
   };
 
-  const handleThumbnailInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleThumbnailInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (ev) => setThumbnailPreview(ev.target?.result as string);
       reader.readAsDataURL(file);
+
+      try {
+        setIsUploading(true);
+        const res = await uploadResourceFile(file);
+        setThumbnailPreview(res.url);
+      } catch (err) {
+        console.error("Cloudinary thumbnail upload error:", err);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -470,7 +543,7 @@ export default function ManageResourcesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/50">
-                {filtered.length === 0 ? (
+                {paginatedResources.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-16 text-center text-secondary font-body-md">
                       <span className="material-symbols-outlined text-4xl text-outline block mb-2">folder_open</span>
@@ -478,7 +551,7 @@ export default function ManageResourcesPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((r) => {
+                  paginatedResources.map((r) => {
                     const statusStyle = STATUS_STYLES[r.status];
                     const isSelected = selectedIds.has(r.id);
                     return (
@@ -570,13 +643,13 @@ export default function ManageResourcesPage() {
         {/* GRID VIEW */}
         {viewMode === "grid" && (
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.length === 0 ? (
+            {paginatedResources.length === 0 ? (
               <div className="col-span-full py-16 text-center text-secondary font-body-md">
                 <span className="material-symbols-outlined text-4xl text-outline block mb-2">folder_open</span>
                 No resources found.
               </div>
             ) : (
-              filtered.map((r) => {
+              paginatedResources.map((r) => {
                 const statusStyle = STATUS_STYLES[r.status];
                 return (
                   <div key={r.id} className="bg-surface-container-low rounded-xl border border-outline-variant p-4 hover:shadow-md hover:border-primary transition-all group flex flex-col gap-3">
@@ -621,23 +694,40 @@ export default function ManageResourcesPage() {
           </div>
         )}
 
-        {/* Pagination */}
+        {/* Pagination Bar */}
         <div className="p-4 bg-surface-container-low flex items-center justify-between border-t border-outline-variant">
           <div className="flex items-center gap-2">
             <span className="text-body-md text-secondary">Items per page:</span>
-            <select className="bg-white border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-primary">
-              <option>10</option>
-              <option>25</option>
-              <option>50</option>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              className="bg-white border border-outline-variant rounded px-2.5 py-1 text-body-md focus:ring-2 focus:ring-primary/30 outline-none cursor-pointer font-semibold text-on-surface"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
             </select>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-body-md text-secondary">1-{Math.min(itemsPerPage, filtered.length)} of {filtered.length}</span>
+            <span className="text-body-md text-secondary font-medium">
+              {filtered.length > 0 ? startIndex + 1 : 0}-{endIndex} of {filtered.length}
+            </span>
             <div className="flex gap-1">
-              <button disabled className="w-8 h-8 flex items-center justify-center rounded hover:bg-white disabled:opacity-30 transition-colors cursor-pointer">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="w-8 h-8 flex items-center justify-center rounded hover:bg-white disabled:opacity-30 transition-colors cursor-pointer"
+                title="Previous Page"
+              >
                 <span className="material-symbols-outlined text-[20px]">chevron_left</span>
               </button>
-              <button className="w-8 h-8 flex items-center justify-center rounded hover:bg-white transition-colors cursor-pointer">
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="w-8 h-8 flex items-center justify-center rounded hover:bg-white disabled:opacity-30 transition-colors cursor-pointer"
+                title="Next Page"
+              >
                 <span className="material-symbols-outlined text-[20px]">chevron_right</span>
               </button>
             </div>

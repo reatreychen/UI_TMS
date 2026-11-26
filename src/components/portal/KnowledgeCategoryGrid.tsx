@@ -24,7 +24,6 @@ export function KnowledgeCategoryGrid() {
             className="group rounded-xl border border-outline-variant bg-white p-stack-md transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
           >
             <div className="mb-stack-sm flex h-12 w-12 items-center justify-center rounded-lg bg-surface-container-high text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-white">
-              {/* eslint-disable-next-line @next/next/no-page-custom-font */}
               <span
                 className="material-symbols-outlined transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6"
                 aria-hidden="true"

@@ -1,25 +1,26 @@
 import { ProtectedRoute } from "@/src/components/auth/ProtectedRoute";
 import { TopNav } from "@/src/components/portal/TopNav";
-import { PortalFooter } from "@/src/components/portal/PortalFooter";
 import { CreateTicketForm } from "@/src/components/portal/CreateTicketForm";
 import { CreateTicketSidebar } from "@/src/components/portal/CreateTicketSidebar";
+import { PortalFooter } from "@/src/components/portal/PortalFooter";
 
 export const metadata = {
-  title: "Create Ticket | Kinetic TMS",
-  description:
-    "Submit a new support request to the Kinetic TMS team. Provide details, set priority, and attach files.",
+  title: "Submit a Ticket | Support Portal",
+  description: "Submit a new support ticket and our team will assist you.",
 };
 
 export default function CreateTicketPage() {
   return (
     <ProtectedRoute allowedRoles={["customer", "agent", "admin"]}>
-      <div className="min-h-screen bg-background">
-        <TopNav activePage="tickets" />
+      <div className="min-h-screen bg-slate-50 text-slate-900 antialiased flex flex-col justify-between">
+        <div>
+          <TopNav activePage="create-ticket" />
 
-        <main className="mx-auto grid max-w-[1440px] grid-cols-1 gap-stack-lg px-container-margin py-stack-lg lg:grid-cols-12">
-          <CreateTicketForm />
-          <CreateTicketSidebar />
-        </main>
+          <main className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 sm:px-6 lg:px-8 py-10 lg:grid-cols-12">
+            <CreateTicketForm />
+            <CreateTicketSidebar />
+          </main>
+        </div>
 
         <PortalFooter />
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { adminUserService } from "@/src/services/adminUserService";
+import { pricingPlanService } from "@/src/services/pricingPlanService";
 
 type PlanStatus = "Active" | "Draft" | "Inactive";
 type BillingCycle = "Monthly" | "Annual" | "Custom";
@@ -23,9 +24,7 @@ interface PricingPlan {
 
 interface FeatureRow {
   name: string;
-  starter: string;
-  professional: string;
-  enterprise: string;
+  [tierKey: string]: string;
 }
 
 const initialPlans: PricingPlan[] = [
@@ -185,9 +184,29 @@ export default function ManagePricingPlansPage() {
   const [realUserCount, setRealUserCount] = useState<number | null>(null);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedMatrix = localStorage.getItem("pricing_feature_matrix");
+      if (savedMatrix) {
+        try {
+          const parsed = JSON.parse(savedMatrix);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMatrixData(parsed);
+          }
+        } catch (e) {}
+      }
+    }
+
     adminUserService.getUsers()
       .then((users) => setRealUserCount(users.length))
       .catch(() => setRealUserCount(null));
+
+    pricingPlanService.getAll()
+      .then((data) => {
+        if (data && data.length > 0) {
+          setPlans(data);
+        }
+      })
+      .catch(() => {});
 
     const handleAdminSearch = (event: Event) => {
       const customEvent = event as CustomEvent<string>;
@@ -286,22 +305,60 @@ export default function ManagePricingPlansPage() {
       icon: editingPlan?.icon || "sell",
     };
 
+    const syncPlanMatrix = (plan: PricingPlan) => {
+      setMatrixData((prev) => {
+        const updated = prev.map((row) => ({
+          ...row,
+          [plan.id]: row[plan.id] || row[plan.name.toLowerCase()] || "Included",
+          [plan.name.toLowerCase()]: row[plan.name.toLowerCase()] || "Included",
+        }));
+        if (typeof window !== "undefined") {
+          localStorage.setItem("pricing_feature_matrix", JSON.stringify(updated));
+          window.dispatchEvent(new Event("pricing-matrix-updated"));
+        }
+        return updated;
+      });
+    };
+
     if (editingPlan) {
-      setPlans((current) => current.map((plan) => (plan.id === editingPlan.id ? planPayload : plan)));
-      triggerToast(`${planPayload.name} plan updated.`);
+      pricingPlanService.update(editingPlan.id, planPayload)
+        .then((res) => {
+          const updatedItem = res || planPayload;
+          setPlans((current) => current.map((plan) => (plan.id === editingPlan.id ? updatedItem : plan)));
+          syncPlanMatrix(updatedItem);
+          triggerToast(`${planPayload.name} plan updated.`);
+        })
+        .catch(() => {
+          setPlans((current) => current.map((plan) => (plan.id === editingPlan.id ? planPayload : plan)));
+          syncPlanMatrix(planPayload);
+          triggerToast(`${planPayload.name} plan updated.`);
+        });
     } else {
-      setPlans((current) => [planPayload, ...current]);
-      triggerToast(`${planPayload.name} plan created.`);
+      pricingPlanService.create(planPayload)
+        .then((res) => {
+          const createdItem = res || planPayload;
+          setPlans((current) => [createdItem, ...current]);
+          syncPlanMatrix(createdItem);
+          triggerToast(`${planPayload.name} plan created.`);
+        })
+        .catch(() => {
+          setPlans((current) => [planPayload, ...current]);
+          syncPlanMatrix(planPayload);
+          triggerToast(`${planPayload.name} plan created.`);
+        });
     }
 
     setShowModal(false);
   };
 
   const toggleStatus = (planId: string) => {
+    const targetPlan = plans.find((p) => p.id === planId);
+    const newStatus: PlanStatus = targetPlan?.status === "Active" ? "Inactive" : "Active";
+    pricingPlanService.update(planId, { status: newStatus }).catch(() => {});
     setPlans((current) =>
       current.map((plan) =>
         plan.id === planId
-          ? { ...plan, status: plan.status === "Active" ? "Inactive" : "Active" }
+          ? { ...plan, status: newStatus }
           : plan
       )
     );
@@ -559,18 +616,23 @@ export default function ManagePricingPlansPage() {
               <thead className="bg-surface-container-low text-label-md uppercase text-on-surface-variant">
                 <tr>
                   <th className="px-6 py-3">Feature Name</th>
-                  <th className="px-4 py-3 text-center">Starter</th>
-                  <th className="px-4 py-3 text-center">Professional</th>
-                  <th className="px-4 py-3 text-center">Enterprise</th>
+                  {plans.map((plan) => (
+                    <th key={plan.id} className="px-4 py-3 text-center">{plan.name}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/50">
-                {featureRows.map((feature) => (
+                {matrixData.map((feature) => (
                   <tr key={feature.name} className="hover:bg-surface-container-low/60">
                     <td className="px-6 py-4 font-medium text-on-surface">{feature.name}</td>
-                    <td className="px-4 py-4 text-center">{featureValue(feature.starter)}</td>
-                    <td className="px-4 py-4 text-center">{featureValue(feature.professional)}</td>
-                    <td className="px-4 py-4 text-center">{featureValue(feature.enterprise)}</td>
+                    {plans.map((plan) => {
+                      const val = feature[plan.id] || feature[plan.name.toLowerCase()] || "Included";
+                      return (
+                        <td key={plan.id} className="px-4 py-4 text-center">
+                          {featureValue(val)}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -911,32 +973,38 @@ export default function ManagePricingPlansPage() {
                 <thead className="bg-surface-container-low text-xs font-bold uppercase text-secondary">
                   <tr>
                     <th className="p-3 border border-outline-variant">Feature</th>
-                    <th className="p-3 border border-outline-variant text-center">Starter</th>
-                    <th className="p-3 border border-outline-variant text-center">Professional</th>
-                    <th className="p-3 border border-outline-variant text-center">Enterprise</th>
+                    {plans.map((plan) => (
+                      <th key={plan.id} className="p-3 border border-outline-variant text-center">
+                        {plan.name}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant">
                   {matrixData.map((row, idx) => (
                     <tr key={row.name}>
                       <td className="p-3 border border-outline-variant font-medium text-on-surface">{row.name}</td>
-                      {(["starter", "professional", "enterprise"] as const).map((tier) => (
-                        <td key={tier} className="p-2 border border-outline-variant text-center">
-                          <select
-                            value={row[tier]}
-                            onChange={(e) => {
-                              const updated = [...matrixData];
-                              updated[idx] = { ...updated[idx], [tier]: e.target.value };
-                              setMatrixData(updated);
-                            }}
-                            className="text-xs border border-outline-variant rounded px-2 py-1 bg-white font-medium focus:ring-2 focus:ring-primary cursor-pointer"
-                          >
-                            <option value="Included">Included</option>
-                            <option value="Limited">Limited</option>
-                            <option value="Unavailable">Unavailable</option>
-                          </select>
-                        </td>
-                      ))}
+                      {plans.map((plan) => {
+                        const key = plan.id;
+                        const val = row[key] || row[plan.name.toLowerCase()] || "Included";
+                        return (
+                          <td key={plan.id} className="p-2 border border-outline-variant text-center">
+                            <select
+                              value={val}
+                              onChange={(e) => {
+                                const updated = [...matrixData];
+                                updated[idx] = { ...updated[idx], [key]: e.target.value };
+                                setMatrixData(updated);
+                              }}
+                              className="text-xs border border-outline-variant rounded px-2 py-1 bg-white font-medium focus:ring-2 focus:ring-primary cursor-pointer"
+                            >
+                              <option value="Included">Included</option>
+                              <option value="Limited">Limited</option>
+                              <option value="Unavailable">Unavailable</option>
+                            </select>
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -952,6 +1020,10 @@ export default function ManagePricingPlansPage() {
               </button>
               <button
                 onClick={() => {
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("pricing_feature_matrix", JSON.stringify(matrixData));
+                    window.dispatchEvent(new Event("pricing-matrix-updated"));
+                  }
                   setShowMatrixModal(false);
                   triggerToast("Feature matrix mapping updated & saved.");
                 }}

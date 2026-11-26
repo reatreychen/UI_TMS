@@ -2,15 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { ChevronRight, ArrowLeft, Download, Share2, Eye, Calendar, FileText, CheckCircle2, BookOpen, Video, ExternalLink } from "lucide-react";
+import { useParams } from "next/navigation";
+import { ChevronRight, ArrowLeft, Download, Share2, Eye, Calendar, CheckCircle2 } from "lucide-react";
 import { TopNav } from "@/src/components/portal/TopNav";
 import { PortalFooter } from "@/src/components/portal/PortalFooter";
 import { fetchResourceById, fetchAllResources, ResourceRecord } from "@/src/services/portalService";
 
 export default function ResourceDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const id = params?.id as string;
 
   const [resource, setResource] = useState<ResourceRecord | null>(null);
@@ -26,9 +25,7 @@ export default function ResourceDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    setIsLoading(true);
 
-    // Fetch primary resource and related published resources
     Promise.all([
       fetchResourceById(id).catch(() => null),
       fetchAllResources({ status: "Published" }).catch(() => []),
@@ -36,7 +33,6 @@ export default function ResourceDetailPage() {
       .then(([resData, allData]) => {
         if (resData) {
           setResource(resData);
-          // Filter related resources (exclude current resource)
           const related = (Array.isArray(allData) ? allData : [])
             .filter((r) => String(r.id) !== String(id))
             .slice(0, 3);
@@ -48,11 +44,11 @@ export default function ResourceDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background text-on-background font-body-md antialiased flex flex-col">
-        <TopNav activePage="dashboard" />
-        <main className="flex-grow pt-24 pb-stack-lg px-container-margin max-w-[1440px] mx-auto w-full flex items-center justify-center">
-          <div className="py-20 text-center text-on-surface-variant font-body-md">
-            <span className="material-symbols-outlined text-4xl animate-spin block mb-2 mx-auto text-primary">
+      <div className="min-h-screen bg-slate-50 text-slate-900 antialiased flex flex-col">
+        <TopNav />
+        <main className="flex-grow py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full flex items-center justify-center">
+          <div className="py-16 text-center text-slate-500 text-sm">
+            <span className="material-symbols-outlined text-4xl animate-spin block mb-2 mx-auto text-blue-600">
               sync
             </span>
             Loading resource details...
@@ -65,22 +61,22 @@ export default function ResourceDetailPage() {
 
   if (!resource) {
     return (
-      <div className="min-h-screen bg-background text-on-background font-body-md antialiased flex flex-col">
-        <TopNav activePage="dashboard" />
-        <main className="flex-grow pt-24 pb-stack-lg px-container-margin max-w-[1440px] mx-auto w-full">
-          <div className="py-20 text-center text-on-surface-variant font-body-md bg-surface-container-low rounded-2xl border border-outline-variant max-w-2xl mx-auto my-12 p-8">
-            <span className="material-symbols-outlined text-5xl text-outline block mb-3 mx-auto">
+      <div className="min-h-screen bg-slate-50 text-slate-900 antialiased flex flex-col">
+        <TopNav />
+        <main className="flex-grow py-14 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+          <div className="py-16 text-center bg-white rounded-2xl border border-slate-200 max-w-xl mx-auto my-8 p-8 shadow-xs">
+            <span className="material-symbols-outlined text-5xl text-slate-400 block mb-3 mx-auto">
               folder_off
             </span>
-            <h2 className="font-headline-lg text-headline-lg text-on-surface mb-2">
+            <h1 className="font-display text-2xl font-bold text-slate-900 mb-2">
               Resource Not Found
-            </h2>
-            <p className="text-on-surface-variant font-body-md mb-6">
+            </h1>
+            <p className="text-slate-600 text-sm mb-6">
               The requested resource could not be found or has been archived.
             </p>
             <Link
               href="/customer/resources"
-              className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-label-md inline-flex items-center gap-2 hover:brightness-110 transition-all"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm inline-flex items-center gap-2 transition-colors"
             >
               <ArrowLeft className="size-4" />
               Back to Resources
@@ -94,98 +90,112 @@ export default function ResourceDetailPage() {
 
   const type = resource.type || "Whitepaper";
   const isVideo = type === "Webinar" || type === "Video";
+
+  const DEFAULT_TYPE_IMAGES: Record<string, string> = {
+    "Case Study": "/images/solutions_hero_banner.jpg",
+    "Video": "/images/video_tutorial_bg.jpg",
+    "Webinar": "/images/support_hero_banner.jpg",
+    "E-book": "/images/ebook_library_bg.jpg",
+    "Whitepaper": "/images/security_whitepaper_bg.jpg",
+    "Guide": "/images/guide_desk_bg.jpg",
+  };
+
   const heroImage =
-    type === "Case Study"
-      ? "https://lh3.googleusercontent.com/aida-public/AB6AXuCwXl3birODmYwQTy-7FS8eywojGpOzOSKp5fsGLU-3eLF3W7oJ49lrjF_wMxShZbueq8-0ZSAO9aRqxGEULbCzKnEYXf-4yphQDfWub9wDRD2iRpmaigRov1lWmSmI0ll0TGP6pzenST05bp7jzIA_Th68j5giu9eBZs7-y53PCZGJDb6ia5NhcDEpgfsWaWvtfC7ipz96wL-JA5kwHCCc0frg90sXqtZMQIahcGA_6DeXOAxlsAbe1bwCZF2ki10RyGFXmB9xtjTm"
-      : isVideo
-      ? "https://lh3.googleusercontent.com/aida-public/AB6AXuDHOyMjXdyrRLYM-pLY6vHoYgr25N4op389ZIr59bVQhF1A2U-gr4h4fC4Xq89c0ThLR0dulNYBxwIb0cwqqIBmU84WUBPW2SBhJ-VQFQrUGuUwdnNh0ZtnXL4-p-6foEQ7XNV9s4yU5TJcD3I-1Ujg-ZXKu6M-DjFxtIWBSj6D9nEmc5iwPgiPiSgJjIFKD3AYNHIhA7ezCHST95Y_imLVZHHQWxwa5KmZCr2raOAXyCWqRjGHrK11rLHVwJpt5TvoOyELM0tbNXsM"
-      : "https://lh3.googleusercontent.com/aida-public/AB6AXuAwUK6h-n768hgfEdMCJin1ysjYc6kwhZYm4Q-_uQAl1rw_U4cKDsp29TYw-OeQWBPnw1TiMdUJEEb9zFyphXpbif_sAIvRX9aNSWcqSVwZBACwO90HW2xXPtXIsVuN74ibKGo1TKOwnjkoHRsWFFcuj3-6PzCNn2N3kHTLseZ6V9HqG8ee1Zp9GIhz9V954UtCS5pWvApesOJTP1VGBXoEW71vTyXjxpWB3lPa6_2bM-qqquDrvCQqjjq1GEvvvo_Prq86FB6bfwpn";
+    resource.thumbnailUrl && !resource.thumbnailUrl.includes("lh3.googleusercontent.com")
+      ? resource.thumbnailUrl
+      : DEFAULT_TYPE_IMAGES[type] || "/images/guide_desk_bg.jpg";
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-body-md text-on-background antialiased">
-      <TopNav activePage="dashboard" />
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 antialiased">
+      <TopNav />
 
-      <main className="mx-auto flex w-full max-w-[1440px] flex-grow flex-col px-container-margin pt-24 pb-stack-lg">
+      <main className="mx-auto flex w-full max-w-7xl flex-grow flex-col px-4 sm:px-6 lg:px-8 py-10">
         {/* Breadcrumb Navigation */}
         <nav
           aria-label="Breadcrumb"
-          className="mb-8 flex items-center gap-2 text-label-md font-semibold text-secondary flex-wrap"
+          className="mb-6 flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-500 flex-wrap"
         >
           <Link
             href="/customer/resources"
-            className="transition-colors hover:text-primary flex items-center gap-1.5"
+            className="transition-colors hover:text-blue-600 flex items-center gap-1.5"
           >
             <ArrowLeft className="size-4" />
             Resources &amp; Insights
           </Link>
-          <ChevronRight aria-hidden className="size-4 text-outline" />
-          <span className="text-secondary">{type}</span>
-          <ChevronRight aria-hidden className="size-4 text-outline" />
-          <span className="text-on-surface truncate max-w-xs sm:max-w-md font-bold">
+          <ChevronRight aria-hidden className="size-4 text-slate-400" />
+          <span>{type}</span>
+          <ChevronRight aria-hidden className="size-4 text-slate-400" />
+          <span className="text-slate-900 truncate max-w-xs sm:max-w-md font-semibold">
             {resource.title}
           </span>
         </nav>
 
         {/* Hero Section */}
-        <section className="mb-12 bg-surface-container-low rounded-3xl border border-outline-variant p-8 md:p-12 relative overflow-hidden shadow-sm">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-          
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
-            <div className="lg:col-span-8 space-y-6">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full font-label-md text-label-md font-semibold">
+        <section className="mb-10 bg-white rounded-2xl border border-slate-200 p-6 sm:p-10 shadow-xs">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="lg:col-span-8 space-y-5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full text-xs font-semibold">
                   <span className="material-symbols-outlined text-[16px]">
                     {isVideo ? "videocam" : type === "Case Study" ? "corporate_fare" : "auto_stories"}
                   </span>
                   {type}
                 </span>
-                <span className="inline-flex items-center gap-1 text-secondary text-label-md bg-surface-container-high px-3 py-1 rounded-full">
+                <span className="inline-flex items-center gap-1.5 text-slate-600 text-xs bg-slate-100 border border-slate-200 px-3 py-1 rounded-full">
                   <Calendar className="size-3.5" />
                   {resource.dateAdded || "Recently published"}
                 </span>
-                <span className="inline-flex items-center gap-1 text-secondary text-label-md bg-surface-container-high px-3 py-1 rounded-full">
+                <span className="inline-flex items-center gap-1.5 text-slate-600 text-xs bg-slate-100 border border-slate-200 px-3 py-1 rounded-full">
                   <Eye className="size-3.5" />
                   {resource.views || "1.2k"} views
                 </span>
               </div>
 
-              <h1 className="font-display text-4xl sm:text-5xl text-on-surface font-bold leading-tight">
+              <h1 className="font-display text-2xl sm:text-4xl text-slate-900 font-bold leading-tight">
                 {resource.title}
               </h1>
 
-              <p className="font-body-lg text-lg text-on-surface-variant max-w-3xl leading-relaxed">
-                {resource.subtitle || "Enterprise research, frameworks, and actionable guidance for high-performing support teams."}
+              <p className="text-base sm:text-lg text-slate-600 max-w-3xl leading-relaxed">
+                {resource.subtitle ||
+                  "Practical frameworks and actionable guidance for modern support and operations teams."}
               </p>
 
-              <div className="flex flex-wrap items-center gap-4 pt-2">
+              <div className="flex flex-wrap items-center gap-3 pt-1">
                 <button
-                  onClick={() => showToast(`Downloading "${resource.title}"...`)}
-                  className="bg-primary text-on-primary px-6 py-3 rounded-xl font-label-md flex items-center gap-2.5 hover:brightness-110 shadow-sm transition-all cursor-pointer"
+                  type="button"
+                  onClick={() => {
+                    if (resource.fileUrl) {
+                      window.open(resource.fileUrl, "_blank");
+                    }
+                    showToast(`Downloading "${resource.title}"...`);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors cursor-pointer"
                 >
-                  <Download className="size-5" />
-                  <span>{isVideo ? "Download Recording" : "Download PDF Document"}</span>
+                  <Download className="size-4" />
+                  <span>{isVideo ? "Watch Recording" : "Download Document"}</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => showToast("Link copied to clipboard!")}
-                  className="bg-surface border border-outline-variant text-on-surface px-5 py-3 rounded-xl font-label-md flex items-center gap-2 hover:bg-surface-container-high transition-all cursor-pointer"
+                  className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors cursor-pointer"
                 >
-                  <Share2 className="size-4 text-secondary" />
+                  <Share2 className="size-4 text-slate-500" />
                   <span>Share Resource</span>
                 </button>
               </div>
             </div>
 
             <div className="lg:col-span-4 flex justify-center">
-              <div className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-outline-variant shadow-md aspect-[4/3] bg-surface group">
+              <div className="relative w-full rounded-2xl overflow-hidden border border-slate-200 shadow-xs aspect-[4/3] bg-slate-100 group">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={heroImage}
                   alt={resource.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end p-4">
-                  <span className="text-white font-label-md text-sm drop-shadow-sm flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[18px]">verified</span>
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/65 via-transparent to-transparent flex items-end p-4">
+                  <span className="text-white text-xs font-semibold flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[16px]">verified</span>
                     Official Kinetic Resource
                   </span>
                 </div>
@@ -195,80 +205,80 @@ export default function ResourceDetailPage() {
         </section>
 
         {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Main Content Column */}
-          <div className="lg:col-span-8 space-y-8">
-            {/* Navigation Tabs */}
-            <div className="flex border-b border-outline-variant gap-8 font-label-md">
+          <div className="lg:col-span-8 space-y-6">
+            <div className="flex border-b border-slate-200 gap-6 text-sm">
               <button
+                type="button"
                 onClick={() => setActiveTab("overview")}
-                className={`pb-3 font-semibold transition-colors relative ${
+                className={`pb-3 font-semibold transition-colors cursor-pointer ${
                   activeTab === "overview"
-                    ? "text-primary border-b-2 border-primary"
-                    : "text-secondary hover:text-on-surface"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-slate-500 hover:text-slate-900"
                 }`}
               >
                 Executive Overview
               </button>
               <button
+                type="button"
                 onClick={() => setActiveTab("preview")}
-                className={`pb-3 font-semibold transition-colors relative ${
+                className={`pb-3 font-semibold transition-colors cursor-pointer ${
                   activeTab === "preview"
-                    ? "text-primary border-b-2 border-primary"
-                    : "text-secondary hover:text-on-surface"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-slate-500 hover:text-slate-900"
                 }`}
               >
                 {isVideo ? "Video Player Preview" : "Document Preview"}
               </button>
               <button
+                type="button"
                 onClick={() => setActiveTab("notes")}
-                className={`pb-3 font-semibold transition-colors relative ${
+                className={`pb-3 font-semibold transition-colors cursor-pointer ${
                   activeTab === "notes"
-                    ? "text-primary border-b-2 border-primary"
-                    : "text-secondary hover:text-on-surface"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-slate-500 hover:text-slate-900"
                 }`}
               >
                 Key Takeaways
               </button>
             </div>
 
-            {/* Tab 1: Overview */}
             {activeTab === "overview" && (
-              <div className="bg-surface rounded-2xl border border-outline-variant p-8 space-y-6">
-                <h3 className="font-headline-md text-2xl font-bold text-on-surface">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-xs">
+                <h2 className="font-display text-xl sm:text-2xl font-bold text-slate-900">
                   About This {type}
-                </h3>
-                <div className="prose max-w-none text-on-surface-variant leading-relaxed space-y-4">
+                </h2>
+                <div className="text-sm sm:text-base text-slate-600 leading-relaxed space-y-4">
                   <p>
                     {resource.description ||
-                      "Modern logistics organizations face increasing complexity across multi-tier supply chain networks. This resource explores practical architectures, compliance benchmarks, and automation paradigms designed to reduce ticket triage friction and eliminate SLA breaches."}
+                      "Modern support organizations face increasing complexity across multi-tier workflows. This resource explores practical architectures, compliance benchmarks, and automation practices designed to reduce ticket triage friction and improve SLA consistency."}
                   </p>
                   <p>
-                    Whether your team is scaling support from regional operations to enterprise global deployment or modernizing legacy ticketing workflows, this material provides peer-reviewed frameworks and real-world deployment metrics.
+                    Whether your team is scaling customer operations across regions or standardizing ticket workflows, this material provides clear frameworks and practical deployment metrics.
                   </p>
                 </div>
 
-                {/* Highlight Box */}
-                <div className="bg-primary/5 rounded-xl border border-primary/20 p-6 space-y-3">
-                  <h4 className="font-headline-md text-lg font-bold text-primary flex items-center gap-2">
-                    <span className="material-symbols-outlined">lightbulb</span>
+                <div className="bg-blue-50/70 rounded-xl border border-blue-200 p-5 sm:p-6 space-y-3">
+                  <h3 className="font-display text-base font-bold text-blue-900 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-blue-600 text-[20px]">lightbulb</span>
                     Who Should Read This?
-                  </h4>
-                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-on-surface text-body-md">
+                  </h3>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-800 text-sm">
                     <li className="flex items-center gap-2">
-                      <CheckCircle2 className="size-4 text-green-600 flex-shrink-0" />
-                      <span>VP of Support &amp; Customer Success</span>
+                      <CheckCircle2 className="size-4 text-emerald-600 flex-shrink-0" />
+                      <span>Support &amp; Customer Success Leads</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <CheckCircle2 className="size-4 text-green-600 flex-shrink-0" />
-                      <span>Logistics &amp; Dispatch IT Architects</span>
+                      <CheckCircle2 className="size-4 text-emerald-600 flex-shrink-0" />
+                      <span>IT &amp; Operations Architects</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <CheckCircle2 className="size-4 text-green-600 flex-shrink-0" />
+                      <CheckCircle2 className="size-4 text-emerald-600 flex-shrink-0" />
                       <span>Support Operations Managers</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <CheckCircle2 className="size-4 text-green-600 flex-shrink-0" />
+                      <CheckCircle2 className="size-4 text-emerald-600 flex-shrink-0" />
                       <span>SLA Compliance Officers</span>
                     </li>
                   </ul>
@@ -276,65 +286,67 @@ export default function ResourceDetailPage() {
               </div>
             )}
 
-            {/* Tab 2: Preview */}
             {activeTab === "preview" && (
-              <div className="bg-surface rounded-2xl border border-outline-variant p-8 space-y-6 text-center">
-                <div className="bg-surface-container-low rounded-xl border border-outline-variant p-12 flex flex-col items-center justify-center space-y-4">
-                  <span className="material-symbols-outlined text-6xl text-primary opacity-80">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs text-center">
+                <div className="bg-slate-50 rounded-xl border border-slate-200 p-10 flex flex-col items-center justify-center space-y-4">
+                  <span className="material-symbols-outlined text-5xl text-blue-600">
                     {isVideo ? "play_circle" : "picture_as_pdf"}
                   </span>
-                  <h4 className="font-headline-md text-xl font-bold text-on-surface">
+                  <h3 className="font-display text-xl font-bold text-slate-900">
                     {isVideo ? "On-Demand Video Player Ready" : "Interactive PDF Preview Available"}
-                  </h4>
-                  <p className="text-on-surface-variant max-w-md text-sm">
+                  </h3>
+                  <p className="text-slate-600 max-w-md text-sm">
                     {isVideo
                       ? "Stream the high-definition recording with closed captions and downloadable slide deck."
                       : "Preview the complete document online or download to read offline at your convenience."}
                   </p>
                   <button
-                    onClick={() => showToast(`Opening interactive preview for "${resource.title}"...`)}
-                    className="mt-2 bg-primary text-on-primary px-6 py-2.5 rounded-xl font-label-md inline-flex items-center gap-2 hover:brightness-110 transition-all cursor-pointer"
+                    type="button"
+                    onClick={() => {
+                      if (resource.fileUrl) window.open(resource.fileUrl, "_blank");
+                      showToast(`Opening interactive preview for "${resource.title}"...`);
+                    }}
+                    className="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center gap-2 transition-colors cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-                    Launch Fullscreen Preview
+                    Launch Preview
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Tab 3: Notes & Takeaways */}
             {activeTab === "notes" && (
-              <div className="bg-surface rounded-2xl border border-outline-variant p-8 space-y-6">
-                <h3 className="font-headline-md text-2xl font-bold text-on-surface">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 space-y-5 shadow-xs">
+                <h2 className="font-display text-xl sm:text-2xl font-bold text-slate-900">
                   Core Takeaways &amp; Findings
-                </h3>
+                </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-5 rounded-xl bg-surface-container-low border border-outline-variant space-y-2">
-                    <span className="text-primary font-bold text-lg">01</span>
-                    <h4 className="font-bold text-on-surface">Automated Initial Triage</h4>
-                    <p className="text-sm text-on-surface-variant">
-                      LLM-assisted ticket classification reduces manual routing delays by up to 64% across enterprise logistics desks.
+                  <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <span className="text-blue-600 font-bold text-base">01</span>
+                    <h3 className="font-bold text-slate-900 text-sm">Automated Initial Triage</h3>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      Intelligent ticket classification reduces manual routing delays by up to 64% across support desks.
                     </p>
                   </div>
-                  <div className="p-5 rounded-xl bg-surface-container-low border border-outline-variant space-y-2">
-                    <span className="text-primary font-bold text-lg">02</span>
-                    <h4 className="font-bold text-on-surface">Multi-Tier Escalations</h4>
-                    <p className="text-sm text-on-surface-variant">
-                      Establishing clear SLA timers with automated fallback rules prevents critical breach anomalies.
+                  <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <span className="text-blue-600 font-bold text-base">02</span>
+                    <h3 className="font-bold text-slate-900 text-sm">Multi-Tier Escalations</h3>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      Establishing clear SLA timers with automated fallback rules prevents critical response delays.
                     </p>
                   </div>
-                  <div className="p-5 rounded-xl bg-surface-container-low border border-outline-variant space-y-2">
-                    <span className="text-primary font-bold text-lg">03</span>
-                    <h4 className="font-bold text-on-surface">Unified Knowledge Integration</h4>
-                    <p className="text-sm text-on-surface-variant">
-                      Embedding contextual articles within agent ticket views speeds first-contact resolution by 38%.
+                  <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <span className="text-blue-600 font-bold text-base">03</span>
+                    <h3 className="font-bold text-slate-900 text-sm">Unified Knowledge Integration</h3>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      Embedding contextual articles speeds first-contact resolution and lowers ticket volume.
                     </p>
                   </div>
-                  <div className="p-5 rounded-xl bg-surface-container-low border border-outline-variant space-y-2">
-                    <span className="text-primary font-bold text-lg">04</span>
-                    <h4 className="font-bold text-on-surface">Continuous Compliance Audits</h4>
-                    <p className="text-sm text-on-surface-variant">
-                      Automated audit trails simplify security reviews and ensure SOC2 and ITIL 4 alignment.
+                  <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <span className="text-blue-600 font-bold text-base">04</span>
+                    <h3 className="font-bold text-slate-900 text-sm">Continuous Compliance Audits</h3>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      Automated audit trails simplify security reviews and maintain SOC2 and ITIL 4 alignment.
                     </p>
                   </div>
                 </div>
@@ -343,70 +355,74 @@ export default function ResourceDetailPage() {
           </div>
 
           {/* Right Sidebar Column */}
-          <div className="lg:col-span-4 space-y-8">
-            {/* Resource Metadata Card */}
-            <div className="bg-surface rounded-2xl border border-outline-variant p-6 space-y-5">
-              <h4 className="font-headline-md text-lg font-bold text-on-surface border-b border-outline-variant pb-3">
+          <div className="lg:col-span-4 space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5 shadow-xs">
+              <h3 className="font-display text-base font-bold text-slate-900 border-b border-slate-200 pb-3">
                 Resource Specifications
-              </h4>
+              </h3>
 
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between items-center py-1 border-b border-outline-variant/40">
-                  <span className="text-secondary font-medium">Format</span>
-                  <span className="text-on-surface font-semibold">{isVideo ? "MP4 Recording" : "PDF Document"}</span>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Format</span>
+                  <span className="text-slate-900 font-semibold">
+                    {isVideo ? "MP4 Recording" : "PDF Document"}
+                  </span>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-outline-variant/40">
-                  <span className="text-secondary font-medium">File Size</span>
-                  <span className="text-on-surface font-semibold">{isVideo ? "210 MB" : "4.8 MB"}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">File Size</span>
+                  <span className="text-slate-900 font-semibold">{isVideo ? "210 MB" : "4.8 MB"}</span>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-outline-variant/40">
-                  <span className="text-secondary font-medium">Downloads</span>
-                  <span className="text-on-surface font-semibold">{resource.downloads || "1.2k"}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Downloads</span>
+                  <span className="text-slate-900 font-semibold">{resource.downloads || "1.2k"}</span>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-outline-variant/40">
-                  <span className="text-secondary font-medium">Published Date</span>
-                  <span className="text-on-surface font-semibold">{resource.dateAdded || "Recently"}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Published Date</span>
+                  <span className="text-slate-900 font-semibold">{resource.dateAdded || "Recently"}</span>
                 </div>
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-secondary font-medium">Language</span>
-                  <span className="text-on-surface font-semibold">English (US)</span>
+                <div className="flex justify-between items-center py-1.5">
+                  <span className="text-slate-500">Language</span>
+                  <span className="text-slate-900 font-semibold">English (US)</span>
                 </div>
               </div>
 
               <button
-                onClick={() => showToast(`Downloading "${resource.title}"...`)}
-                className="w-full bg-primary-container text-on-primary-container py-3 rounded-xl font-label-md font-semibold flex items-center justify-center gap-2 hover:brightness-95 transition-all cursor-pointer"
+                type="button"
+                onClick={() => {
+                  if (resource.fileUrl) window.open(resource.fileUrl, "_blank");
+                  showToast(`Downloading "${resource.title}"...`);
+                }}
+                className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 <Download className="size-4" />
                 <span>Instant Download</span>
               </button>
             </div>
 
-            {/* Related Resources Sidebar Card */}
-            <div className="bg-surface rounded-2xl border border-outline-variant p-6 space-y-5">
-              <h4 className="font-headline-md text-lg font-bold text-on-surface border-b border-outline-variant pb-3">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-xs">
+              <h3 className="font-display text-base font-bold text-slate-900 border-b border-slate-200 pb-3">
                 Related Resources
-              </h4>
+              </h3>
 
               {relatedResources.length === 0 ? (
-                <p className="text-sm text-secondary text-center py-4">No related resources available at the moment.</p>
+                <p className="text-sm text-slate-500 text-center py-4">
+                  No related resources available at the moment.
+                </p>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {relatedResources.map((rel) => (
                     <Link
                       key={rel.id}
                       href={`/customer/resources/${rel.id}`}
-                      className="group block p-3.5 rounded-xl border border-outline-variant/60 hover:border-primary hover:bg-surface-container-low transition-all"
+                      className="group block p-3.5 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-slate-50 transition-colors"
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-                          {rel.type || "Whitepaper"}
-                        </span>
-                      </div>
-                      <h5 className="font-bold text-sm text-on-surface group-hover:text-primary transition-colors line-clamp-2">
+                      <span className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider">
+                        {rel.type || "Whitepaper"}
+                      </span>
+                      <h4 className="font-semibold text-sm text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2 mt-1">
                         {rel.title}
-                      </h5>
-                      <p className="text-xs text-secondary mt-1">
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">
                         {rel.dateAdded || "Recent"} • {rel.views || "500+"} views
                       </p>
                     </Link>
@@ -415,18 +431,17 @@ export default function ResourceDetailPage() {
               )}
             </div>
 
-            {/* Support CTA Sidebar Card */}
-            <div className="bg-gradient-to-br from-primary/10 to-secondary-container/30 rounded-2xl border border-primary/20 p-6 space-y-3 text-center">
-              <span className="material-symbols-outlined text-4xl text-primary block mx-auto">
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-3 text-center text-white">
+              <span className="material-symbols-outlined text-3xl text-blue-400 block mx-auto">
                 support_agent
               </span>
-              <h5 className="font-bold text-on-surface">Need Custom Enterprise Help?</h5>
-              <p className="text-xs text-on-surface-variant">
-                Our solutions engineering team can help implement these frameworks into your existing TMS architecture.
+              <h3 className="font-display font-bold text-base text-white">Need Help Applying This?</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Our support specialists can help you configure these workflows in your workspace.
               </p>
               <Link
                 href="/customer/create-ticket"
-                className="mt-2 inline-block bg-primary text-on-primary px-5 py-2 rounded-lg font-label-md text-xs hover:brightness-110 transition-all"
+                className="mt-1 inline-block bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-xs font-semibold transition-colors"
               >
                 Contact Support Desk
               </Link>
@@ -436,9 +451,9 @@ export default function ResourceDetailPage() {
       </main>
 
       {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-50 bg-inverse-surface text-inverse-on-surface px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-fade-in border border-outline-variant/20">
-          <span className="material-symbols-outlined text-primary">info</span>
-          <span className="font-label-md text-label-md">{toastMsg}</span>
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-2.5 border border-slate-800 text-sm font-medium">
+          <span className="material-symbols-outlined text-blue-400 text-[20px]">info</span>
+          <span>{toastMsg}</span>
         </div>
       )}
 

@@ -7,40 +7,40 @@ import { ArticleSidebar } from "@/src/components/portal/ArticleSidebar";
 import { ARTICLE_DETAIL } from "@/src/constants/articleDetail";
 
 export const metadata = {
-  title: `${ARTICLE_DETAIL.title} | Kinetic TMS Knowledge Base`,
-  description: "Read the article in the Kinetic TMS Knowledge Base.",
+  title: `${ARTICLE_DETAIL.title} | Help Center`,
+  description: "Read the article in the Kinetic Support Help Center.",
 };
 
 export default function ArticleDetailPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background font-body-lg text-on-surface">
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 antialiased">
       <TopNav activePage="knowledge-base" />
 
-      <main className="mx-auto flex w-full max-w-[1440px] flex-grow flex-col px-container-margin py-stack-lg">
+      <main className="mx-auto flex w-full max-w-7xl flex-grow flex-col px-4 sm:px-6 lg:px-8 py-8">
         {/* Breadcrumbs */}
         <nav
           aria-label="Breadcrumb"
-          className="mb-stack-lg flex items-center gap-2 text-label-md font-semibold text-secondary"
+          className="mb-6 flex flex-wrap items-center gap-2 text-xs sm:text-sm font-medium text-slate-500"
         >
           <Link
             href="/customer/knowledge-base"
-            className="transition-colors hover:text-primary"
+            className="transition-colors hover:text-blue-600"
           >
-            Knowledge Base
+            Help Center
           </Link>
-          <ChevronRight aria-hidden className="size-4" />
-          <Link href="#" className="transition-colors hover:text-primary">
+          <ChevronRight aria-hidden className="size-4 text-slate-400" />
+          <Link
+            href="/customer/knowledge-base"
+            className="transition-colors hover:text-blue-600"
+          >
             Getting Started
           </Link>
-          <ChevronRight aria-hidden className="size-4" />
-          <span className="text-on-surface">{ARTICLE_DETAIL.title}</span>
+          <ChevronRight aria-hidden className="size-4 text-slate-400" />
+          <span className="text-slate-900 font-semibold">{ARTICLE_DETAIL.title}</span>
         </nav>
 
-        <div className="flex flex-col gap-stack-lg lg:flex-row">
-          {/* Left Column: Article Content */}
+        <div className="flex flex-col gap-6 lg:flex-row">
           <ArticleContent />
-
-          {/* Right Column: Sidebar */}
           <ArticleSidebar />
         </div>
       </main>

@@ -75,9 +75,9 @@ function CreateTicketModal({ onClose }: CreateTicketModalProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-ticket-title"
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm animate-in fade-in duration-200"
     >
-      <div className="bg-surface-container-lowest w-full max-w-2xl rounded-xl shadow-md overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-surface-container-lowest w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 ease-out transform-gpu">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-bright">
           <h2 id="create-ticket-title" className="text-headline-md font-bold text-on-surface">

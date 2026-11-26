@@ -65,9 +65,12 @@ export default function DepartmentManagementPage() {
   const fetchAllCategories = async () => {
     try {
       const res = await adminCategoryService.getCategories({ limit: 100 });
-      if (res?.data) {
-        setAllCategories(res.data);
-      }
+      const cats = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data)
+        ? res.data
+        : (res as any)?.data?.data || [];
+      setAllCategories(cats);
     } catch (err) {
       console.warn("Failed to load category list:", err);
     }
@@ -101,13 +104,41 @@ export default function DepartmentManagementPage() {
   // Open modal for Edit
   const handleOpenEditModal = (dept: Department) => {
     setEditingDepartment(dept);
-    const existingCatIds = dept.categories ? dept.categories.map((c: any) => c.id).filter(Boolean) : [];
+    const catIdsFromDept = dept.categories ? dept.categories.map((c: any) => c.id).filter(Boolean) : [];
+    const catIdsFromAll = allCategories.filter((c) => c.department_id === dept.id || c.department?.id === dept.id).map((c) => c.id);
+    const existingCatIds = Array.from(new Set([...catIdsFromDept, ...catIdsFromAll]));
+
     setFormData({
       name: dept.name,
       description: dept.description || "",
       selectedCategoryIds: existingCatIds,
       newCategoryName: "",
     });
+  };
+
+  // Create a new category inline from department modal
+  const handleAddNewCategory = async () => {
+    const name = formData.newCategoryName.trim();
+    if (!name) return;
+
+    setIsSubmitting(true);
+    try {
+      const created = await adminCategoryService.createCategory({
+        name,
+        department_id: editingDepartment?.id || undefined,
+      });
+      showToastNotification(`Category "${created.name}" created successfully!`);
+      setAllCategories((prev) => [...prev, created]);
+      setFormData((prev) => ({
+        ...prev,
+        selectedCategoryIds: Array.from(new Set([...prev.selectedCategoryIds, created.id])),
+        newCategoryName: "",
+      }));
+    } catch (err) {
+      showToastNotification(getErrorMessage(err), "error");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Create or Update Submission
@@ -118,32 +149,53 @@ export default function DepartmentManagementPage() {
     setIsSubmitting(true);
     try {
       let targetDeptId = "";
+      const deptName = formData.name.trim();
+
       if (editingDepartment) {
         const updated = await adminDepartmentService.updateDepartment(editingDepartment.id, {
-          name: formData.name.trim(),
+          name: deptName,
           description: formData.description.trim() || undefined,
         });
         targetDeptId = updated.id;
-        showToastNotification(`Department "${updated.name}" updated successfully!`);
-        setEditingDepartment(null);
       } else {
         const created = await adminDepartmentService.createDepartment({
-          name: formData.name.trim(),
+          name: deptName,
           description: formData.description.trim() || undefined,
         });
         targetDeptId = created.id;
-        showToastNotification(`Department "${created.name}" created successfully!`);
-        setShowCreateModal(false);
       }
 
       if (targetDeptId) {
-        for (const catId of formData.selectedCategoryIds) {
-          try {
-            await adminCategoryService.updateCategory(catId, { department_id: targetDeptId });
-          } catch (cErr) {
-            console.warn("Failed to assign category", catId, cErr);
-          }
+        // Unassign categories removed during edit (send null to clear department_id)
+        if (editingDepartment) {
+          const prevCatIdsFromDept = editingDepartment.categories ? editingDepartment.categories.map((c: any) => c.id).filter(Boolean) : [];
+          const prevCatIdsFromAll = allCategories.filter((c) => c.department_id === editingDepartment.id || c.department?.id === editingDepartment.id).map((c) => c.id);
+          const prevCatIds = Array.from(new Set([...prevCatIdsFromDept, ...prevCatIdsFromAll]));
+          
+          const removedCatIds = prevCatIds.filter((id: string) => !formData.selectedCategoryIds.includes(id));
+          await Promise.all(
+            removedCatIds.map(async (catId) => {
+              try {
+                await adminCategoryService.updateCategory(catId, { department_id: null });
+              } catch (cErr) {
+                console.warn("Failed to unassign category", catId, cErr);
+              }
+            })
+          );
         }
+
+        // Assign checked categories concurrently
+        await Promise.all(
+          formData.selectedCategoryIds.map(async (catId) => {
+            try {
+              await adminCategoryService.updateCategory(catId, { department_id: targetDeptId });
+            } catch (cErr) {
+              console.warn("Failed to assign category", catId, cErr);
+            }
+          })
+        );
+
+        // Create new category if user entered a name
         if (formData.newCategoryName.trim()) {
           try {
             await adminCategoryService.createCategory({
@@ -154,8 +206,17 @@ export default function DepartmentManagementPage() {
             console.warn("Failed to create new category", cErr);
           }
         }
-        await fetchDepartments();
-        await fetchAllCategories();
+
+        await Promise.all([fetchDepartments(), fetchAllCategories()]);
+
+        showToastNotification(
+          editingDepartment
+            ? `Department "${deptName}" updated successfully!`
+            : `Department "${deptName}" created successfully!`
+        );
+
+        setEditingDepartment(null);
+        setShowCreateModal(false);
       }
     } catch (err) {
       showToastNotification(getErrorMessage(err), "error");
@@ -181,231 +242,177 @@ export default function DepartmentManagementPage() {
   };
 
   return (
-    <div className="p-stack-lg max-w-[1400px] mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Toast Notification */}
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-body-md font-medium text-white transition-all animate-in fade-in slide-in-from-bottom-5 ${
+          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-body-md font-semibold text-white transition-all animate-in fade-in slide-in-from-bottom-4 ${
             toast.type === "success" ? "bg-emerald-600" : "bg-rose-600"
           }`}
         >
-          {toast.type === "success" ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <CheckCircle2 className="w-5 h-5" />
           <span>{toast.message}</span>
         </div>
       )}
 
-      {/* Header & Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant shadow-xs">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant shadow-xs">
         <div>
-          <h1 className="font-display text-headline-lg font-bold text-on-surface flex items-center gap-3">
+          <h1 className="text-display font-bold text-on-surface flex items-center gap-2.5">
             <Building2 className="w-8 h-8 text-primary" />
-            Department Management
+            Departments Management
           </h1>
-          <p className="font-body-md text-secondary mt-1">
-            Create, manage, and monitor departments and organizational teams
+          <p className="text-body-md text-secondary mt-1">
+            Organize support teams, manage departments, and assign ticket categories.
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchDepartments}
-            disabled={isLoading}
-            className="p-2.5 rounded-xl border border-outline-variant text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors"
-            title="Refresh departments"
-          >
-            <RefreshCw className={`w-5 h-5 ${isLoading ? "animate-spin text-primary" : ""}`} />
-          </button>
-          <button
-            onClick={handleOpenCreateModal}
-            className="bg-primary hover:bg-primary/90 text-on-primary font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Add Department</span>
-          </button>
-        </div>
+        <button
+          onClick={handleOpenCreateModal}
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-on-primary font-semibold text-body-md rounded-xl shadow-xs hover:bg-primary/90 transition-all cursor-pointer shrink-0"
+        >
+          <Plus className="w-5 h-5" />
+          <span>Add Department</span>
+        </button>
       </div>
 
-      {/* Analytics / Stats Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-xs flex items-center gap-4">
-          <div className="p-3 bg-primary-container text-primary rounded-xl">
-            <Building2 className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-label-md text-secondary uppercase font-semibold tracking-wider">Total Departments</p>
-            <p className="text-headline-md font-bold text-on-surface">{departments.length}</p>
-          </div>
+      {/* Search & Actions Bar */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary" />
+          <input
+            type="text"
+            placeholder="Search departments or descriptions..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-surface-container-lowest border border-outline-variant rounded-xl text-on-surface placeholder:text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-body-md transition-all shadow-xs"
+          />
         </div>
-
-        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-xs flex items-center gap-4">
-          <div className="p-3 bg-secondary-container text-secondary rounded-xl">
-            <Layers className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-label-md text-secondary uppercase font-semibold tracking-wider">Total Categories</p>
-            <p className="text-headline-md font-bold text-on-surface">
-              {departments.reduce((acc, d) => acc + (d.categories?.length || 0), 0)}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-xs flex items-center gap-4">
-          <div className="p-3 bg-tertiary-container text-tertiary rounded-xl">
-            <Users className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-label-md text-secondary uppercase font-semibold tracking-wider">Assigned Members</p>
-            <p className="text-headline-md font-bold text-on-surface">
-              {departments.reduce((acc, d) => acc + (d.users?.length || 0), 0)}
-            </p>
-          </div>
-        </div>
+        <button
+          onClick={() => { fetchDepartments(); fetchAllCategories(); }}
+          className="p-2.5 text-secondary hover:text-on-surface hover:bg-surface-container-high rounded-xl border border-outline-variant transition-colors"
+          title="Refresh Data"
+        >
+          <RefreshCw className={`w-5 h-5 ${isLoading ? "animate-spin" : ""}`} />
+        </button>
       </div>
 
-      {/* Main Content Area */}
-      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-xs overflow-hidden">
-        {/* Toolbar */}
-        <div className="p-4 border-b border-outline-variant flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
-            <input
-              type="text"
-              placeholder="Search departments by name or description..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-xl text-on-surface placeholder:text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-            />
-          </div>
-          <p className="text-body-sm text-secondary">
-            Showing <span className="font-semibold text-on-surface">{filteredDepartments.length}</span> of{" "}
-            {departments.length} departments
-          </p>
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span className="text-body-md font-medium">{errorMessage}</span>
         </div>
+      )}
 
-        {/* Error Alert */}
-        {errorMessage && (
-          <div className="p-4 bg-rose-50 border-b border-rose-200 text-rose-700 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <span className="text-body-md font-medium">{errorMessage}</span>
-          </div>
-        )}
-
-        {/* Loading Skeleton */}
+      {/* Departments Table */}
+      <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl overflow-hidden shadow-xs">
         {isLoading ? (
-          <div className="p-12 text-center space-y-3">
-            <RefreshCw className="w-8 h-8 animate-spin text-primary mx-auto" />
-            <p className="text-body-md text-secondary font-medium">Loading departments from database...</p>
+          <div className="p-12 text-center text-secondary flex flex-col items-center justify-center gap-3">
+            <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+            <p className="font-medium text-body-md">Loading departments and categories...</p>
           </div>
         ) : filteredDepartments.length === 0 ? (
-          /* Empty State */
-          <div className="p-12 text-center space-y-4">
-            <div className="w-16 h-16 bg-surface-container-high text-secondary rounded-full flex items-center justify-center mx-auto">
-              <Building2 className="w-8 h-8" />
-            </div>
-            <div className="max-w-md mx-auto">
-              <h3 className="text-title-lg font-bold text-on-surface">No Departments Found</h3>
-              <p className="text-body-md text-secondary mt-1">
-                {searchQuery
-                  ? `No departments match "${searchQuery}". Try a different search keyword.`
-                  : "No departments have been created yet. Click 'Add Department' above to create your first department."}
-              </p>
-            </div>
-            {!searchQuery && (
-              <button
-                onClick={handleOpenCreateModal}
-                className="bg-primary text-on-primary font-semibold px-4 py-2 rounded-xl text-body-md shadow-xs hover:bg-primary/90 transition-all inline-flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Create First Department
-              </button>
-            )}
+          <div className="p-12 text-center text-secondary flex flex-col items-center justify-center gap-2">
+            <Building2 className="w-12 h-12 text-secondary/40" />
+            <h3 className="text-title-md font-bold text-on-surface">No Departments Found</h3>
+            <p className="text-body-md max-w-sm">
+              {searchQuery ? "No departments match your search criteria." : "Get started by adding your first support department."}
+            </p>
           </div>
         ) : (
-          /* Departments Table */
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-surface-container-low border-b border-outline-variant text-label-md font-semibold text-secondary uppercase tracking-wider">
-                  <th className="py-3.5 px-6">Department Name</th>
-                  <th className="py-3.5 px-6">Description</th>
-                  <th className="py-3.5 px-6 text-center">Assigned Users</th>
-                  <th className="py-3.5 px-6 text-center">Categories</th>
-                  <th className="py-3.5 px-6 text-right">Actions</th>
+                <tr className="border-b border-outline-variant bg-surface-container-low text-label-md text-secondary uppercase tracking-wider font-bold">
+                  <th className="py-4 px-6">Department</th>
+                  <th className="py-4 px-6">Description</th>
+                  <th className="py-4 px-6 text-center">Assigned Users</th>
+                  <th className="py-4 px-6 text-center">Categories</th>
+                  <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-outline-variant">
-                {filteredDepartments.map((dept) => (
-                  <tr
-                    key={dept.id}
-                    className="hover:bg-surface-container-high/50 transition-colors group"
-                  >
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-primary-container/60 text-primary flex items-center justify-center font-bold text-title-md shrink-0">
-                          {dept.name.charAt(0).toUpperCase()}
+              <tbody className="divide-y divide-outline-variant/60">
+                {filteredDepartments.map((dept) => {
+                  const deptCatMap = new Map<string, { id: string; name: string }>();
+                  (dept.categories || []).forEach((c: any) => { if (c.id && c.name) deptCatMap.set(c.id, c); });
+                  allCategories
+                    .filter((c) => c.department_id === dept.id || c.department?.id === dept.id)
+                    .forEach((c) => { deptCatMap.set(c.id, { id: c.id, name: c.name }); });
+                  const deptCategories = Array.from(deptCatMap.values());
+
+                  return (
+                    <tr
+                      key={dept.id}
+                      className="hover:bg-surface-container-high/50 transition-colors group"
+                    >
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-primary-container/60 text-primary flex items-center justify-center font-bold text-title-md shrink-0">
+                            {dept.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-on-surface text-body-md group-hover:text-primary transition-colors">
+                              {dept.name}
+                            </p>
+                            <p className="text-body-xs text-secondary font-mono">
+                              ID: {dept.id.slice(0, 8)}...
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold text-on-surface text-body-md group-hover:text-primary transition-colors">
-                            {dept.name}
-                          </p>
-                          <p className="text-body-xs text-secondary font-mono">
-                            ID: {dept.id.slice(0, 8)}...
-                          </p>
-                        </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="py-4 px-6 text-body-md text-secondary max-w-md truncate">
-                      {dept.description || <span className="italic opacity-60">No description provided</span>}
-                    </td>
+                      <td className="py-4 px-6 text-body-md text-secondary max-w-md truncate">
+                        {dept.description || <span className="italic opacity-60">No description provided</span>}
+                      </td>
 
-                    <td className="py-4 px-6 text-center">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-body-xs font-semibold bg-surface-container-high text-on-surface">
-                        <Users className="w-3.5 h-3.5 text-secondary" />
-                        {dept.users?.length || 0}
-                      </span>
-                    </td>
+                      <td className="py-4 px-6 text-center">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-body-xs font-semibold bg-surface-container-high text-on-surface">
+                          <Users className="w-3.5 h-3.5 text-secondary" />
+                          {dept.users?.length || 0}
+                        </span>
+                      </td>
 
-                    <td className="py-4 px-6 text-center">
-                      <div className="flex flex-wrap items-center justify-center gap-1.5">
-                        {dept.categories && dept.categories.length > 0 ? (
-                          dept.categories.map((cat: any) => (
-                            <span
-                              key={cat.id || cat.name}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20"
-                            >
-                              <Layers className="w-3 h-3" />
-                              {cat.name}
+                      <td className="py-4 px-6 text-center">
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
+                          {deptCategories.length > 0 ? (
+                            deptCategories.map((cat) => (
+                              <span
+                                key={cat.id || cat.name}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20"
+                              >
+                                <Layers className="w-3 h-3" />
+                                {cat.name}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-body-xs font-medium bg-surface-container-high text-secondary">
+                              No categories assigned
                             </span>
-                          ))
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-body-xs font-medium bg-surface-container-high text-secondary">
-                            No categories assigned
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                          )}
+                        </div>
+                      </td>
 
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenEditModal(dept)}
-                          className="p-2 text-secondary hover:text-primary hover:bg-primary-container/40 rounded-lg transition-colors"
-                          title="Edit Department"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingDepartment(dept)}
-                          className="p-2 text-secondary hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="Delete Department"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleOpenEditModal(dept)}
+                            className="p-2 text-secondary hover:text-primary hover:bg-primary-container/40 rounded-lg transition-colors"
+                            title="Edit Department"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setDeletingDepartment(dept)}
+                            className="p-2 text-secondary hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Delete Department"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -507,8 +514,23 @@ export default function DepartmentManagementPage() {
                       placeholder="Add new category name..."
                       value={formData.newCategoryName}
                       onChange={(e) => setFormData({ ...formData, newCategoryName: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddNewCategory();
+                        }
+                      }}
                       className="flex-1 px-3 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-xs text-on-surface placeholder:text-secondary focus:outline-none focus:ring-1 focus:ring-primary"
                     />
+                    <button
+                      type="button"
+                      disabled={!formData.newCategoryName.trim() || isSubmitting}
+                      onClick={handleAddNewCategory}
+                      className="px-3.5 py-1.5 bg-primary text-on-primary font-semibold text-body-xs rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-all cursor-pointer shrink-0 flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Category</span>
+                    </button>
                   </div>
                 </div>
               </div>

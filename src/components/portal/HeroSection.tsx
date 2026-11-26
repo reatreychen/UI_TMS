@@ -1,47 +1,49 @@
-import { Headphones } from "lucide-react";
+"use client";
 
-import { CreateTicketTrigger } from "./CreateTicketModal";
+import Link from "next/link";
+import { BookOpen, Plus } from "lucide-react";
+import { useAppSelector } from "@/src/store/hooks";
+import { selectUser } from "@/src/store/slices/authSlice";
 
 export function HeroSection() {
+  const currentUser = useAppSelector(selectUser);
+
   return (
-    <section className="relative flex flex-col items-center justify-between gap-8 overflow-hidden rounded-xl bg-primary p-12 text-on-primary md:flex-row">
-      <div className="z-10 max-w-2xl space-y-4">
-        <h1 className="text-display font-bold">
-          Need Help? Create a Support Ticket
+    <section className="rounded-2xl bg-white border border-slate-200 p-6 sm:p-8 soft-shadow flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="space-y-2 max-w-2xl">
+        <div className="inline-flex items-center gap-2 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200/80 px-2.5 py-0.5 rounded-full">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" aria-hidden />
+          Customer Support Portal
+        </div>
+
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+          {currentUser?.fullName
+            ? `Welcome back, ${currentUser.fullName}`
+            : "My Support Tickets"}
         </h1>
-        <p className="text-body-lg opacity-90">
-          Our dedicated expert team is ready to assist you with any technical
-          issues or service requests. Response times are currently under 15
-          minutes.
+
+        <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+          Track active ticket progress, reply to assigned specialists, and review resolved requests in one place.
         </p>
-        <div className="pt-4">
-          <CreateTicketTrigger className="bg-surface-container-lowest text-primary hover:bg-opacity-90 active:scale-95 px-8 py-3 rounded-lg text-body-lg font-bold transition-all">
-            Create Ticket
-          </CreateTicketTrigger>
-        </div>
       </div>
 
-      <div className="z-10 hidden w-72 h-72 lg:block">
-        <div className="flex h-full w-full flex-col items-center justify-center rounded-2xl border border-white/20 bg-primary-fixed-dim/20 p-6 text-center backdrop-blur-xl">
-          <Headphones
-            aria-hidden
-            className="mb-4 size-16"
-            strokeWidth={1.5}
-          />
-          <span className="text-headline-md font-semibold">
-            24/7 Priority Support
-          </span>
-          <span className="text-body-md opacity-80">
-            Connected to Global Nodes
-          </span>
-        </div>
-      </div>
+      <div className="flex flex-wrap items-center gap-3 shrink-0">
+        <Link
+          href="/customer/create-ticket"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-2xs transition-colors"
+        >
+          <Plus className="size-4" aria-hidden />
+          New Support Ticket
+        </Link>
 
-      {/* Decorative background gradient */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute top-0 right-0 h-full w-1/2 bg-gradient-to-l from-primary-container/30 to-transparent"
-      />
+        <Link
+          href="/customer/knowledge-base"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors"
+        >
+          <BookOpen className="size-4 text-slate-500" aria-hidden />
+          Help Center
+        </Link>
+      </div>
     </section>
   );
 }

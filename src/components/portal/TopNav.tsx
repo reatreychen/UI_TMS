@@ -1,12 +1,22 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import {
+  Bell,
+  ChevronDown,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Plus,
+  Ticket,
+  UserCircle,
+  X,
+} from "lucide-react";
 
-import { CreateTicketTrigger } from "./CreateTicketModal";
 import { NotificationBell } from "@/src/components/NotificationBell";
-import { TelegramBotModal } from "./TelegramBotModal";
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import {
   logout,
@@ -24,7 +34,43 @@ export type ActivePage =
   | "support"
   | "create-ticket";
 
+const PORTAL_NAV_LINKS = [
+  {
+    label: "Help Center",
+    href: "/customer/knowledge-base",
+    match: ["/customer/knowledge-base"],
+  },
+  {
+    label: "My Tickets",
+    href: "/customer/my-ticket",
+    match: ["/customer/my-ticket", "/customer/tickets"],
+  },
+  {
+    label: "Support",
+    href: "/customer/support",
+    match: ["/customer/support"],
+  },
+  {
+    label: "Solutions",
+    href: "/customer/solutions",
+    match: ["/customer/solutions", "/solutions"],
+  },
+  {
+    label: "Resources",
+    href: "/customer/resources",
+    match: ["/customer/resources", "/resources"],
+  },
+  {
+    label: "Pricing",
+    href: "/customer/pricing",
+    match: ["/customer/pricing", "/pricing"],
+  },
+];
+
+const emptySubscribe = () => () => {};
+
 export function TopNav({ activePage }: { activePage?: ActivePage }) {
+  void activePage;
   const pathname = usePathname() || "";
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -32,21 +78,17 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
   const currentUser = useAppSelector(selectUser);
   const userRole = useAppSelector(selectRoleName);
 
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMounted(true);
+    const handleScroll = () => setScrolled(window.scrollY > 12);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  const isCreateTicketActive = pathname.startsWith("/customer/create-ticket");
-  const isKnowledgeBaseActive = pathname.startsWith("/customer/knowledge-base");
-  const isSupportActive = pathname.startsWith("/customer/support");
-  const isSolutionsActive = pathname.startsWith("/customer/solutions") || pathname.startsWith("/solutions");
-  const isPricingActive = pathname.startsWith("/customer/pricing") || pathname.startsWith("/pricing");
-  const isResourcesActive = pathname.startsWith("/customer/resources") || pathname.startsWith("/resources");
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -60,6 +102,7 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
 
   const handleLogout = () => {
     setIsMenuOpen(false);
+    setMobileNavOpen(false);
     dispatch(logout());
     router.push("/login");
   };
@@ -77,229 +120,223 @@ export function TopNav({ activePage }: { activePage?: ActivePage }) {
   };
 
   const getMyTicketsHref = () => {
-    if (userRole === "admin") return "/admin/users";
+    if (userRole === "admin") return "/admin/ticket-management";
     if (userRole === "agent") return "/agent/tickets";
     return "/customer/my-ticket";
   };
 
-  // Prevent SSR vs Client hydration mismatch by ensuring client-only auth state renders after mount
-  const showMyTickets = mounted && isAuthenticated;
   const showUserDropdown = mounted && isAuthenticated && Boolean(currentUser);
 
   return (
-    <div>
-      <header className="bg-surface sticky top-0 z-50 w-full border-b border-outline-variant shadow-sm">
-        <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between px-container-margin py-3">
-          {/* Left: Logo + Nav links */}
-          <div className="flex items-center gap-8">
-            <Link href="/" className="text-headline-md font-bold text-primary flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-2xl">bolt</span>
-              <span>TMS Pro</span>
-            </Link>
-            <nav className="hidden items-center gap-6 md:flex">
-              <Link
-                href="/customer/knowledge-base"
-                className={`text-body-md transition-colors ${
-                  isKnowledgeBaseActive
-                    ? "border-b-2 border-primary pb-1 text-primary font-medium"
-                    : "rounded px-2 py-1 text-on-surface-variant hover:bg-surface-container-low"
-                }`}
-              >
-                Knowledge Base
-              </Link>
-              <Link
-                href="/customer/solutions"
-                className={`text-body-md transition-colors ${
-                  isSolutionsActive
-                    ? "border-b-2 border-primary pb-1 text-primary font-medium"
-                    : "rounded px-2 py-1 text-on-surface-variant hover:bg-surface-container-low"
-                }`}
-              >
-                Solutions
-              </Link>        
-              <Link
-                href="/customer/support"
-                className={`text-body-md transition-colors ${
-                  isSupportActive
-                    ? "border-b-2 border-primary pb-1 text-primary font-medium"
-                    : "rounded px-2 py-1 text-on-surface-variant hover:bg-surface-container-low"
-                }`}
-              >
-                Support
-              </Link>
-              <Link
-                href="/customer/pricing"
-                className={`text-body-md transition-colors ${
-                  isPricingActive
-                    ? "border-b-2 border-primary pb-1 text-primary font-medium"
-                    : "rounded px-2 py-1 text-on-surface-variant hover:bg-surface-container-low"
-                }`}
-              >
-                Pricing
-              </Link>
-              <Link
-                href="/customer/resources"
-                className={`text-body-md transition-colors ${
-                  isResourcesActive
-                    ? "border-b-2 border-primary pb-1 text-primary font-medium"
-                    : "rounded px-2 py-1 text-on-surface-variant hover:bg-surface-container-low"
-                }`}
-              >
-                Resources
-              </Link>
-            </nav>
+    <header
+      className={`sticky top-0 z-50 w-full transition-all duration-200 ${
+        scrolled
+          ? "bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs"
+          : "bg-white border-b border-slate-200/80"
+      }`}
+    >
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        {/* Brand */}
+        <Link
+          href="/customer/knowledge-base"
+          className="flex items-center gap-2.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded-lg"
+        >
+          <div className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 shrink-0">
+            <Image
+              src="/images/tms_pro_logo.jpg"
+              alt="TMS Pro Logo"
+              width={32}
+              height={32}
+              className="w-full h-full object-cover"
+            />
           </div>
+          <div className="flex flex-col leading-none">
+            <span className="text-[15px] font-bold tracking-tight text-slate-900">
+              TMS <span className="text-blue-600">Pro</span>
+            </span>
+            <span className="text-[11px] font-medium text-slate-500 mt-0.5">
+              Help Center
+            </span>
+          </div>
+        </Link>
 
-          {/* Right: Search + CTA + Auth + Icons */}
-          <div className="flex items-center gap-4">
-            {/* Search */}
-            <div className="hidden items-center rounded-lg border border-outline-variant bg-surface-container-low px-3 py-1.5 sm:flex">
-              <span className="material-symbols-outlined mr-2 text-outline text-[18px]">
-                search
-              </span>
-              <input
-                type="text"
-                placeholder="Search tickets..."
-                className="w-44 border-none bg-transparent text-body-md focus:ring-0 focus:outline-none"
-              />
-            </div>
+        {/* Desktop Nav */}
+        <nav aria-label="Portal navigation" className="hidden lg:flex items-center gap-1">
+          {PORTAL_NAV_LINKS.map((item) => {
+            const isActive = item.match.some((prefix) => pathname.startsWith(prefix));
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-blue-50 text-blue-700 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
 
-            {/* Create Ticket CTA */}
-            <CreateTicketTrigger className="bg-primary-container text-on-primary hover:bg-primary active:scale-95 px-4 py-2 rounded-lg font-bold text-body-md transition-all">
-              Create Ticket
-            </CreateTicketTrigger>
+        {/* Right Controls */}
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/customer/create-ticket"
+            className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-2xs transition-colors"
+          >
+            <Plus className="size-4" aria-hidden />
+            <span>Submit Ticket</span>
+          </Link>
 
-            {/* Notifications */}
-            {mounted && isAuthenticated ? (
-              <NotificationBell />
-            ) : (
+          {mounted && isAuthenticated && <NotificationBell />}
+
+          {showUserDropdown ? (
+            <div className="relative" ref={menuRef}>
               <button
                 type="button"
-                aria-label="Notifications"
-                className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-low"
+                onClick={() => setIsMenuOpen((prev) => !prev)}
+                aria-expanded={isMenuOpen}
+                className="flex items-center gap-2 p-1 pr-2.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
               >
-                <span className="material-symbols-outlined text-[20px]">
-                  notifications
+                <div className="h-7 w-7 flex items-center justify-center rounded-full bg-blue-600 text-white font-semibold text-xs overflow-hidden">
+                  {currentUser?.profileImage ? (
+                    <img
+                      src={currentUser.profileImage}
+                      alt={currentUser.fullName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    currentUser?.fullName?.[0]?.toUpperCase() ?? "U"
+                  )}
+                </div>
+                <span className="text-sm font-medium text-slate-800 hidden sm:block max-w-[120px] truncate">
+                  {currentUser?.fullName}
                 </span>
+                <ChevronDown
+                  className={`size-4 text-slate-400 transition-transform duration-150 ${
+                    isMenuOpen ? "rotate-180" : ""
+                  }`}
+                  aria-hidden
+                />
               </button>
-            )}
 
-            {/* Help */}
-            <button
-              type="button"
-              aria-label="Help"
-              className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-low"
-            >
-              <span className="material-symbols-outlined text-[20px]">
-                help_outline
-              </span>
-            </button>
-
-            {/* Auth Dropdown OR Login Link */}
-            {showUserDropdown ? (
-              <div className="relative" ref={menuRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className="flex items-center gap-2.5 p-1.5 pl-2.5 rounded-full border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low transition-all shadow-sm cursor-pointer"
-                >
-                  <div className="h-7 w-7 flex items-center justify-center rounded-full bg-primary text-on-primary font-bold text-label-md overflow-hidden">
-                    {currentUser?.profileImage ? (
-                      <img
-                        src={currentUser.profileImage}
-                        alt={currentUser.fullName}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      currentUser?.fullName?.[0]?.toUpperCase() ?? "U"
-                    )}
+              {isMenuOpen && (
+                <div className="modal-pop absolute right-0 mt-2 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg z-50">
+                  <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                    <p className="text-sm font-semibold text-slate-900 truncate">
+                      {currentUser?.fullName}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">
+                      {currentUser?.email}
+                    </p>
                   </div>
-                  <span className="text-body-md font-semibold text-on-surface hidden sm:block max-w-[120px] truncate">
-                    {currentUser?.fullName}
-                  </span>
-                  <span className={`material-symbols-outlined text-outline text-[18px] transition-transform duration-200 ${isMenuOpen ? "rotate-180" : ""}`}>
-                    expand_more
-                  </span>
-                </button>
 
-                {/* Dropdown Menu */}
-                {isMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-xl border border-outline-variant bg-surface-container-lowest p-2 shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                    <div className="px-3 py-2.5 border-b border-outline-variant/60 mb-1">
-                      <p className="text-body-md font-bold text-on-surface truncate">
-                        {currentUser?.fullName}
-                      </p>
-                      <p className="text-label-md text-on-surface-variant truncate">
-                        {currentUser?.email}
-                      </p>
-                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-primary-container/15 text-primary">
-                        {userRole}
-                      </span>
-                    </div>
+                  <Link
+                    href={getMyTicketsHref()}
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                  >
+                    <Ticket className="size-4 text-slate-500" aria-hidden />
+                    My Tickets
+                  </Link>
 
-                    <Link
-                      href={getProfileHref()}
-                      onClick={() => setIsMenuOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-on-surface hover:bg-surface-container-low transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-primary text-[18px]">
-                        account_circle
-                      </span>
-                      View Profile
-                    </Link>
+                  <Link
+                    href="/customer/notifications"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                  >
+                    <Bell className="size-4 text-slate-500" aria-hidden />
+                    Notifications
+                  </Link>
 
-                    {userRole?.toLowerCase() !== "customer" && userRole?.toLowerCase() !== "user" && (
+                  <Link
+                    href={getProfileHref()}
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                  >
+                    <UserCircle className="size-4 text-slate-500" aria-hidden />
+                    Profile Settings
+                  </Link>
+
+                  {userRole?.toLowerCase() !== "customer" &&
+                    userRole?.toLowerCase() !== "user" && (
                       <Link
                         href={getDashboardHref()}
                         onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-on-surface hover:bg-surface-container-low transition-colors"
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
                       >
-                        <span className="material-symbols-outlined text-primary text-[18px]">
-                          dashboard
-                        </span>
-                        Dashboard
-                      </Link>
-                    )}
-                    
-                    {userRole?.toLowerCase() !== "admin" && (
-                      <Link
-                        href={getMyTicketsHref()}
-                        onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-on-surface hover:bg-surface-container-low transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-primary text-[18px]">
-                          confirmation_number
-                        </span>
-                        My Tickets
+                        <LayoutDashboard className="size-4 text-slate-500" aria-hidden />
+                        Workspace Dashboard
                       </Link>
                     )}
 
-                    <div className="border-t border-outline-variant/60 my-1" />
+                  <div className="border-t border-slate-100 my-1" />
 
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-md font-medium text-error hover:bg-error-container/20 transition-colors text-left cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">
-                        logout
-                      </span>
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <Link
-                href="/login"
-                className="px-4 py-2 text-primary font-bold rounded-lg hover:bg-surface-container-low transition-colors text-body-md"
-              >
-                Login
-              </Link>
-            )}
-          </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-left cursor-pointer"
+                  >
+                    <LogOut className="size-4" aria-hidden />
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 font-semibold text-sm transition-colors"
+            >
+              Sign In
+            </Link>
+          )}
+
+          {/* Mobile Menu Toggle */}
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen((prev) => !prev)}
+            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileNavOpen}
+            className="lg:hidden w-9 h-9 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+          >
+            {mobileNavOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
         </div>
-      </header>
-    </div>
+      </div>
+
+      {/* Mobile Navigation Drawer */}
+      {mobileNavOpen && (
+        <div className="lg:hidden border-t border-slate-200 bg-white px-4 py-3 space-y-1">
+          {PORTAL_NAV_LINKS.map((item) => {
+            const isActive = item.match.some((prefix) => pathname.startsWith(prefix));
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileNavOpen(false)}
+                className={`block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-blue-50 text-blue-700 font-semibold"
+                    : "text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+          <Link
+            href="/customer/create-ticket"
+            onClick={() => setMobileNavOpen(false)}
+            className="sm:hidden mt-2 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold"
+          >
+            <Plus className="size-4" aria-hidden />
+            <span>Submit a Ticket</span>
+          </Link>
+        </div>
+      )}
+    </header>
   );
 }

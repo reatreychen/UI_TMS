@@ -72,10 +72,40 @@ const SYSTEM_PERMISSION_CATALOG: (AdminPermission & { label: string })[] = [
   { id: "perm-rpt-1", module: "reports", action: "read",   label: "View Analytics & Reports" },
   { id: "perm-rpt-2", module: "reports", action: "export", label: "Export Reports (CSV/PDF)" },
 
+  { id: "perm-res-1", module: "resources", action: "create", label: "Create Resource" },
+  { id: "perm-res-2", module: "resources", action: "read",   label: "View Resources" },
+  { id: "perm-res-3", module: "resources", action: "update", label: "Update Resource" },
+  { id: "perm-res-4", module: "resources", action: "delete", label: "Delete Resource" },
+
+  { id: "perm-prc-1", module: "pricing_plans", action: "create", label: "Create Pricing Plan" },
+  { id: "perm-prc-2", module: "pricing_plans", action: "read",   label: "View Pricing Plans" },
+  { id: "perm-prc-3", module: "pricing_plans", action: "update", label: "Update Pricing Plan" },
+  { id: "perm-prc-4", module: "pricing_plans", action: "delete", label: "Delete Pricing Plan" },
+
   { id: "perm-tc-1", module: "ticket_comments", action: "create", label: "Add Comment" },
   { id: "perm-tc-2", module: "ticket_comments", action: "read",   label: "View Comments" },
   { id: "perm-tc-3", module: "ticket_comments", action: "delete", label: "Delete Comment" },
 ];
+
+const ACTION_ALIAS_MAP: Record<string, string> = {
+  create_ticket: "create",
+  delete_ticket: "delete",
+  update_ticket: "update",
+  view_tickets: "read",
+  view_articles: "read",
+  view_users: "read",
+  view_agents: "read",
+  view_roles: "read",
+  view_categories: "read",
+  view_departments: "read",
+  view_reports: "read",
+  view_audit_logs: "read",
+  view_resources: "read",
+  view_pricing_plans: "read",
+  view_comments: "read",
+};
+
+const INVALID_MODULES = new Set(["read", "read_module_permission"]);
 
 export default function PermissionsPage() {
   const dispatch = useAppDispatch();
@@ -105,40 +135,45 @@ export default function PermissionsPage() {
   const [newPermAction, setNewPermAction] = useState("");
 
   const effectivePermissions = useMemo(() => {
-    if (!allPermissions || allPermissions.length === 0) {
-      return SYSTEM_PERMISSION_CATALOG;
+    const catalogLabelMap = new Map<string, string>();
+    SYSTEM_PERMISSION_CATALOG.forEach((cat) => {
+      catalogLabelMap.set(`${cat.module.trim().toLowerCase()}:${cat.action.trim().toLowerCase()}`, cat.label);
+    });
+
+    const result: (AdminPermission & { label: string })[] = [];
+    const seenModuleAction = new Set<string>();
+
+    // 1. Process all permissions from DB first
+    if (allPermissions && allPermissions.length > 0) {
+      allPermissions.forEach((dbP) => {
+        const rawMod = dbP.module.trim().toLowerCase();
+        if (INVALID_MODULES.has(rawMod)) return;
+        const rawAct = dbP.action.trim().toLowerCase();
+        const normAct = ACTION_ALIAS_MAP[rawAct] || rawAct;
+        const key = `${rawMod}:${normAct}`;
+        if (!seenModuleAction.has(key)) {
+          seenModuleAction.add(key);
+          const label = catalogLabelMap.get(key) || `${normAct.replace(/_/g, " ")}`;
+          result.push({
+            id: dbP.id,
+            module: dbP.module,
+            action: normAct,
+            label,
+          });
+        }
+      });
     }
 
-    const usedDbIds = new Set<string>();
-    // Exact match: catalog module/action now == DB module/action
-    const mappedCatalog = SYSTEM_PERMISSION_CATALOG.map((cat) => {
-      const dbMatch = allPermissions.find(
-        (dbP) =>
-          !usedDbIds.has(dbP.id) &&
-          dbP.module === cat.module &&
-          dbP.action === cat.action
-      );
-      if (dbMatch) {
-        usedDbIds.add(dbMatch.id);
-        return { ...cat, id: dbMatch.id };
-      }
-      return cat;
-    });
-
-    // Append any DB permissions not in catalog
-    allPermissions.forEach((dbP) => {
-      if (!usedDbIds.has(dbP.id)) {
-        mappedCatalog.push({
-          id: dbP.id,
-          module: dbP.module,
-          action: dbP.action,
-          label: `${dbP.action.replace(/_/g, " ")}`,
-        });
-        usedDbIds.add(dbP.id);
+    // 2. Add fallback catalog permissions if not present in DB
+    SYSTEM_PERMISSION_CATALOG.forEach((cat) => {
+      const key = `${cat.module.trim().toLowerCase()}:${cat.action.trim().toLowerCase()}`;
+      if (!seenModuleAction.has(key)) {
+        seenModuleAction.add(key);
+        result.push(cat);
       }
     });
 
-    return mappedCatalog;
+    return result;
   }, [allPermissions]);
 
   const modules = useMemo(() => {
@@ -197,7 +232,18 @@ export default function PermissionsPage() {
   };
 
   const currentModulePerms = useMemo(() => {
-    return permissionsByModule.get(selectedModule) || [];
+    const raw = permissionsByModule.get(selectedModule) || [];
+    const unique: (AdminPermission & { label: string })[] = [];
+    const seenActions = new Set<string>();
+    for (const perm of raw) {
+      const rawAct = perm.action.trim().toLowerCase();
+      const normAct = ACTION_ALIAS_MAP[rawAct] || rawAct;
+      if (!seenActions.has(normAct)) {
+        seenActions.add(normAct);
+        unique.push(perm);
+      }
+    }
+    return unique;
   }, [permissionsByModule, selectedModule]);
 
   const isModuleAllEnabled = useMemo(() => {
@@ -257,9 +303,23 @@ export default function PermissionsPage() {
     try {
       const validPermissionIds: string[] = [];
       for (const id of selectedRolePermissionIds) {
-        const dbPerm = allPermissions.find((p) => p.id === id);
+        let dbPerm = allPermissions.find((p) => p.id === id);
+
+        if (!dbPerm) {
+          const catalogItem = SYSTEM_PERMISSION_CATALOG.find((cat) => cat.id === id);
+          if (catalogItem) {
+            dbPerm = allPermissions.find(
+              (p) =>
+                p.module.trim().toLowerCase() === catalogItem.module.trim().toLowerCase() &&
+                p.action.trim().toLowerCase() === catalogItem.action.trim().toLowerCase()
+            );
+          }
+        }
+
         if (dbPerm) {
-          validPermissionIds.push(dbPerm.id);
+          if (!validPermissionIds.includes(dbPerm.id)) {
+            validPermissionIds.push(dbPerm.id);
+          }
         } else {
           const catalogItem = SYSTEM_PERMISSION_CATALOG.find((cat) => cat.id === id);
           if (catalogItem) {
@@ -270,7 +330,9 @@ export default function PermissionsPage() {
                 createPermissionThunk({ module: formattedMod, action: formattedAct })
               );
               if (createPermissionThunk.fulfilled.match(res) && res.payload?.id) {
-                validPermissionIds.push(res.payload.id);
+                if (!validPermissionIds.includes(res.payload.id)) {
+                  validPermissionIds.push(res.payload.id);
+                }
               }
             } catch (err) {
               console.warn("Failed auto-creating permission:", catalogItem, err);

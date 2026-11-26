@@ -110,30 +110,13 @@ function getRoleName(user: AdminUser): string {
 
 function isAgentUser(user: AdminUser, agentRoleIds: Set<string>) {
   const roleName = getRoleName(user).toLowerCase();
-  const fullName = (user.fullName || "").toLowerCase();
-  const email = (user.email || "").toLowerCase();
 
-  if (
-    roleName.includes("customer") ||
-    roleName === "user" ||
-    fullName.includes("customer") ||
-    email.includes("customer")
-  ) {
+  // Exclude standard customer accounts that have no department or jobTitle
+  if (roleName === "user" && !user.departmentId && !user.jobTitle) {
     return false;
   }
 
-  if (
-    roleName.includes("agent") ||
-    roleName.includes("support") ||
-    roleName.includes("engineer") ||
-    roleName.includes("specialist") ||
-    roleName.includes("admin") ||
-    roleName.includes("manager")
-  ) {
-    return true;
-  }
-
-  return Boolean(user.roleId && agentRoleIds.has(user.roleId));
+  return true;
 }
 
 function mapAvailability(user: AdminUser): AgentAvailability {
@@ -318,30 +301,26 @@ export const adminAgentService = {
 
     if (users && users.length > 0) {
       const agentUsers = users.filter((user) => isAgentUser(user, agentRoleIds));
-      if (agentUsers.length > 0) {
-        // Deduplicate agents by ID
-        const uniqueMap = new Map<string, AdminUser>();
-        for (const u of agentUsers) {
-          if (!uniqueMap.has(u.id)) {
-            uniqueMap.set(u.id, u);
-          }
-        }
-        const uniqueUsers = Array.from(uniqueMap.values());
+      const targetUsers = agentUsers.length > 0 ? agentUsers : users;
 
-        agents = uniqueUsers.map((user) => {
-          const mapped = mapUserToAgent(user, ticketCounts, departmentsById, tickets);
-          return {
-            ...mapped,
-            autoAssignEnabled: true,
-            maxCapacity: 5,
-            capacityPct: Math.min(100, Math.round((mapped.activeTickets / 5) * 100)),
-          };
-        });
-      } else {
-        agents = MOCK_AGENTS_FALLBACK;
+      // Deduplicate agents by ID
+      const uniqueMap = new Map<string, AdminUser>();
+      for (const u of targetUsers) {
+        if (!uniqueMap.has(u.id)) {
+          uniqueMap.set(u.id, u);
+        }
       }
-    } else {
-      agents = MOCK_AGENTS_FALLBACK;
+      const uniqueUsers = Array.from(uniqueMap.values());
+
+      agents = uniqueUsers.map((user) => {
+        const mapped = mapUserToAgent(user, ticketCounts, departmentsById, tickets);
+        return {
+          ...mapped,
+          autoAssignEnabled: true,
+          maxCapacity: 5,
+          capacityPct: Math.min(100, Math.round((mapped.activeTickets / 5) * 100)),
+        };
+      });
     }
 
     return {
@@ -364,13 +343,20 @@ export const adminAgentService = {
   },
 
   async createAgent(payload: CreateAgentPayload, agentRoleId: string | null): Promise<AgentRecord> {
+    let finalRoleId = agentRoleId;
+    if (!finalRoleId) {
+      const roles = await adminUserService.getRoles().catch(() => []);
+      const agentRole = roles.find((r) => r.name.toLowerCase().includes("agent") || r.name.toLowerCase().includes("support")) || roles[0];
+      finalRoleId = agentRole?.id || null;
+    }
+
     const created = await adminUserService.createUser({
       fullName: payload.fullName,
       email: payload.email,
       password: payload.password || "TempPass123",
       jobTitle: payload.jobTitle || "Support Agent",
       departmentId: payload.departmentId,
-      roleId: agentRoleId || undefined,
+      roleId: finalRoleId || undefined,
       isActive: true,
     });
 

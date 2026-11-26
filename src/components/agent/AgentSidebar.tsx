@@ -111,23 +111,6 @@ export function AgentSidebar() {
           />
           Reports
         </Link>
-        <Link
-          href="/agent/settings"
-          className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-all ${
-            pathname === "/agent/settings"
-              ? "bg-secondary-container font-bold text-on-secondary-container"
-              : "text-on-surface-variant hover:bg-surface-container-high"
-          }`}
-        >
-          {pathname === "/agent/settings" && (
-            <div className="absolute left-0 h-8 w-1 rounded-r bg-primary" />
-          )}
-          <HelpCircle
-            aria-hidden
-            className={`size-5 ${pathname === "/agent/settings" ? "text-primary" : ""}`}
-          />
-          Support &amp; Resources
-        </Link>
       </nav>
 
       <div className="mt-auto space-y-4">
