@@ -18,12 +18,10 @@ interface LiveAgentChatProps {
   session?: ChatSession;
 }
 
-const API_ORIGIN =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/v1$/, "") ||
-  "http://localhost:8000";
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_WS_URL ||
-  (API_ORIGIN.includes(".netlify.app") ? "" : API_ORIGIN);
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/v1$/, "") ||
+  "http://localhost:8000";
 
 export function LiveAgentChat({ sessionId, session }: LiveAgentChatProps) {
   const currentUser = useAppSelector(selectUser);

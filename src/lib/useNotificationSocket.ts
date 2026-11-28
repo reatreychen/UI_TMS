@@ -18,10 +18,10 @@ function resolveWsUrl(): string {
     return process.env.NEXT_PUBLIC_WS_URL;
   }
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (apiUrl && (apiUrl.includes("localhost") || apiUrl.includes("127.0.0.1"))) {
+  if (apiUrl) {
     return apiUrl.replace(/\/api\/v1$/, "");
   }
-  return "";
+  return "http://localhost:8000";
 }
 
 export function useNotificationSocket() {
@@ -34,8 +34,7 @@ export function useNotificationSocket() {
     if (
       !isAuthenticated ||
       typeof window === "undefined" ||
-      !wsUrl ||
-      wsUrl.includes(".netlify.app")
+      !wsUrl
     ) {
       return;
     }
