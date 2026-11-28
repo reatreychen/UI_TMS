@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TMS UI (`UI_TMS`)
 
-## Getting Started
+A modern, role-based **Ticket Management System (TMS)** web application built with **Next.js 16 (App Router)**, **React 19**, **TypeScript**, and **Tailwind CSS 4**. Provides dedicated portals for **Customers**, **Support Agents**, and **Administrators** with real-time notifications and live chat.
 
-First, run the development server:
+---
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (`App Router`) + React 19 + TypeScript 5 (`Node.js >= 20`)
+- **Styling:** Tailwind CSS 4 + Lucide React icons + React Hot Toast
+- **State & Data Fetching:** Redux Toolkit, TanStack React Query, Zustand, Axios (with automatic JWT refresh interceptor)
+- **Forms & Validation:** React Hook Form + Zod
+- **Real-Time:** `socket.io-client` for live notifications and agent/customer chat
+- **Hosting:** Vercel (`vercel.json`)
+
+---
+
+## Application Portals & Routes
+
+### Public & Authentication
+- `/login`, `/register`, `/forgot-password`, `/oauth-callback`, `/unauthorized`
+- `/pricing`, `/resources`, `/solutions`
+
+### Customer Portal (`/customer/*`)
+- `/customer/tickets`, `/customer/my-ticket`, `/customer/tickets/[id]`, `/customer/create-ticket`
+- `/customer/knowledge-base`, `/customer/knowledge-base/[id]`
+- `/customer/resources`, `/customer/resources/[id]`, `/customer/solutions`, `/customer/pricing`
+- `/customer/support`, `/customer/notifications`, `/customer/profile`
+
+### Agent Portal (`/agent/*`)
+- `/agent/dashboard`, `/agent/queue`, `/agent/assigned`, `/agent/my-tickets`
+- `/agent/tickets`, `/agent/tickets/[id]`
+- `/agent/chat` (live chat), `/agent/reports`, `/agent/settings`, `/agent/profile`
+
+### Admin Portal (`/admin/*`)
+- `/admin/dashboard` & `/admin/dashboard/telemetry`
+- `/admin/ticket-management`, `/admin/users`, `/admin/roles`, `/admin/permissions`
+- `/admin/departments`, `/admin/departments-management`, `/admin/categories`
+- `/admin/knowledge-base`, `/admin/resources`, `/admin/pricing-plans`
+- `/admin/reports`, `/admin/audit-logs`, `/admin/profile`
+
+---
+
+## Getting Started (Local Development)
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure environment variables
+
+Create `.env.local` (or edit `.env.development`) and point it to your running TMS Backend API:
+
+```env
+# Backend REST API base URL
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+
+# Optional: WebSocket URL (automatically derived from NEXT_PUBLIC_API_URL if omitted)
+# NEXT_PUBLIC_WS_URL=http://localhost:8000
+```
+
+### 3. Run the development server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Available Scripts
 
-## Learn More
+| Command | Description |
+|---|---|
+| `npm run dev` | Start Next.js development server |
+| `npm run build` | Build production bundle |
+| `npm run start` | Start production Next.js server |
+| `npm run lint` | Run ESLint checks |
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploying on Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Import `reatreychen/UI_TMS` into [Vercel](https://vercel.com) (`vercel.json` is pre-configured for Next.js).
+2. Add the environment variable in **Project Settings → Environment Variables**:
+   - `NEXT_PUBLIC_API_URL` = `https://<your-backend-url>/api/v1`
+   - *(Optional)* `NEXT_PUBLIC_WS_URL` = `https://<your-backend-url>`
+3. Ensure your Vercel deployment URL is listed in the backend's `FRONTEND_URL` and `CORS_ORIGINS`.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Related Repository
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Backend API (NestJS + PostgreSQL):** [Service_Api_TMS](https://github.com/reatreychen/Service_Api_TMS)
