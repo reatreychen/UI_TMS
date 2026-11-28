@@ -12,16 +12,14 @@ import {
   ChatMessage,
   ChatSession,
 } from "@/src/services/chatService";
+import { resolveWsUrl } from "@/src/lib/api";
 
 interface LiveAgentChatProps {
   sessionId: string;
   session?: ChatSession;
 }
 
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_WS_URL ||
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/v1$/, "") ||
-  "http://localhost:8000";
+const SOCKET_URL = resolveWsUrl();
 
 export function LiveAgentChat({ sessionId, session }: LiveAgentChatProps) {
   const currentUser = useAppSelector(selectUser);

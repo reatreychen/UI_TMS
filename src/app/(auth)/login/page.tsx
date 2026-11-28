@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { useAppDispatch, useAppSelector } from "@/src/store/hooks";
 import { loginThunk, logout, selectIsAuthenticated, selectUser } from "@/src/store/slices/authSlice";
+import { API_URL } from "@/src/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -67,7 +68,7 @@ export default function LoginPage() {
   };
 
   const handleGoogleSignIn = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/auth/google`;
+    window.location.href = `${API_URL}/auth/google`;
   };
 
   return (

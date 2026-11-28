@@ -12,17 +12,7 @@ import {
   removeNotification,
 } from "@/src/store/slices/notificationSlice";
 import type { Notification } from "@/src/services/notificationService";
-
-function resolveWsUrl(): string {
-  if (process.env.NEXT_PUBLIC_WS_URL) {
-    return process.env.NEXT_PUBLIC_WS_URL;
-  }
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (apiUrl) {
-    return apiUrl.replace(/\/api\/v1$/, "");
-  }
-  return "http://localhost:8000";
-}
+import { resolveWsUrl } from "@/src/lib/api";
 
 export function useNotificationSocket() {
   const dispatch = useAppDispatch();

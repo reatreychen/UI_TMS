@@ -1,6 +1,20 @@
 import axios from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+export function resolveApiUrl(): string {
+  const raw = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1")
+    .trim()
+    .replace(/\/+$/, "");
+  return raw.endsWith("/api/v1") ? raw : `${raw}/api/v1`;
+}
+
+export function resolveWsUrl(): string {
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL.trim().replace(/\/+$/, "");
+  }
+  return resolveApiUrl().replace(/\/api\/v1$/, "");
+}
+
+export const API_URL = resolveApiUrl();
 
 export const api = axios.create({
   baseURL: API_URL,
