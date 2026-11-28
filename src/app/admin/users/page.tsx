@@ -24,7 +24,7 @@ interface UserFormState {
 const emptyInviteForm: UserFormState = {
   fullName: "",
   email: "",
-  password: "TempPass123",
+  password: "",
   jobTitle: "",
   roleId: "",
   departmentId: "",
@@ -253,23 +253,27 @@ export default function AdminUsersPage() {
 
   const handleInviteSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!inviteForm.fullName.trim() || !inviteForm.email.trim() || !inviteForm.password.trim()) return;
+    const email = inviteForm.email.trim();
+    if (!inviteForm.fullName.trim() || !email || !inviteForm.password.trim()) return;
 
     setIsSaving(true);
     try {
-      await adminUserService.createUser({
+      const createdUser = await adminUserService.createUser({
         fullName: inviteForm.fullName.trim(),
-        email: inviteForm.email.trim(),
+        email,
         password: inviteForm.password,
         jobTitle: inviteForm.jobTitle.trim() || undefined,
         roleId: inviteForm.roleId || undefined,
         departmentId: inviteForm.departmentId || undefined,
         isActive: inviteForm.isActive,
       });
-      await refreshUsers();
-      setInviteForm(emptyInviteForm);
       setShowInviteModal(false);
-      triggerToast(`User ${inviteForm.email} created.`);
+      setInviteForm(emptyInviteForm);
+      if (createdUser) {
+        setUsers((current) => [createdUser, ...current]);
+      }
+      triggerToast(`User ${email} created.`);
+      void refreshUsers().catch(() => {});
     } catch (error) {
       triggerToast(getErrorMessage(error));
     } finally {
@@ -786,9 +790,9 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/40 p-4 backdrop-blur-xs">
           <div className="modal-pop w-full max-w-sm rounded-xl border border-outline-variant bg-surface-container-lowest p-6 text-center shadow-2xl">
             <span className="material-symbols-outlined mb-2 text-4xl text-error">warning</span>
-            <h3 className="mb-2 text-headline-md font-bold text-on-surface">Revoke Access?</h3>
+            <h3 className="mb-2 text-headline-md font-bold text-on-surface">Delete User?</h3>
             <p className="mb-6 text-body-md text-on-surface-variant">
-              Are you sure you want to remove <strong className="text-on-surface">{showDeleteModal.fullName}</strong>?
+              Are you sure you want to delete <strong className="text-on-surface">{showDeleteModal.fullName}</strong>?
             </p>
             <div className="flex items-center justify-center gap-3">
               <button
@@ -802,7 +806,7 @@ export default function AdminUsersPage() {
                 disabled={isSaving}
                 className="cursor-pointer rounded-lg bg-error px-4 py-2 text-body-md font-semibold text-on-error transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isSaving ? "Removing..." : "Revoke Access"}
+                {isSaving ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>
@@ -851,7 +855,7 @@ function UserFormFields<T extends Omit<UserFormState, "password"> | UserFormStat
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-bold uppercase text-outline">Corporate Email</label>
+        <label className="mb-1 block text-xs font-bold uppercase text-outline">Email</label>
         <input
           type="email"
           required
@@ -864,13 +868,14 @@ function UserFormFields<T extends Omit<UserFormState, "password"> | UserFormStat
 
       {includePassword && "password" in form && (
         <div>
-          <label className="mb-1 block text-xs font-bold uppercase text-outline">Temporary Password</label>
+          <label className="mb-1 block text-xs font-bold uppercase text-outline">Password</label>
           <input
             type="text"
             required
             minLength={6}
             value={(form as UserFormState).password || ""}
             onChange={(event) => setForm((current) => ({ ...current, password: event.target.value } as unknown as T))}
+            placeholder="Minimum 6 characters"
             className="w-full rounded-lg border border-outline-variant bg-surface-container-low p-2.5 text-body-md outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
